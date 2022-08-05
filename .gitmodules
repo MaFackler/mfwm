@@ -1,0 +1,3 @@
+[submodule "libs/mflibs"]
+	path = libs/mflibs
+	url = https://github.com/MaFackler/mflibs.git
