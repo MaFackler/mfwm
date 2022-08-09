@@ -1,3 +1,5 @@
 APP=xterm
 export DISPLAY=:30
 exec ./build/mfwm
+sleep 1
+exec xterm

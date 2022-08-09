@@ -20,6 +20,10 @@ void X11Base::init() {
     XSetFillStyle(this->display, this->gc, FillSolid);
 }
 
+void X11Base::shutdown() {
+    XFreeGC(this->display, this->gc);
+    XCloseDisplay(this->display);
+}
 
 X11Window X11Base::create_window(u32 width, u32 height) {
     XSetWindowAttributes attribs = {};
@@ -44,7 +48,6 @@ X11Window X11Base::create_window(u32 width, u32 height) {
 
 void X11Base::destroy_window(X11Window &window) {
     XFreePixmap(this->display, window.draw);
-    // TODO: window close?
 }
 
 X11Color X11Base::add_color(u8 r, u8 g, u8 b) {

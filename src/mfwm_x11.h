@@ -21,6 +21,7 @@ struct X11Base {
     XColor *colors;
 
     void init();
+    void shutdown();
     X11Window create_window(u32 width, u32 height);
     void destroy_window(X11Window &window);
     X11Color add_color(u8 r, u8 g, u8 b);

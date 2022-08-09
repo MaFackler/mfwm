@@ -1,4 +1,4 @@
-CFLAGS=-I./libs/mflibs/src -g
+CFLAGS=-I./libs/mflibs/src -g -Wno-deprecated-declarations
 LIBS=-lX11
 
 all: build/mfwm
