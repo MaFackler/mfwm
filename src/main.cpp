@@ -24,6 +24,7 @@ struct State {
     Statusbar statusbar;
 };
 
+
 #define LOG(msg) fprintf(log_file, msg "\n");
 #define LOGF(msg, ...) fprintf(log_file, msg "\n", __VA_ARGS__);
 #define ERROR(msg) fprintf(stderr, msg); exit(EXIT_FAILURE);
@@ -31,14 +32,7 @@ struct State {
 static State state;
 FILE *log_file = NULL;
 
-void run() {
-    if (fork() == 0) {
-        char * l[] = {(char *) "dmenu_run", NULL};
-        setsid();
-        execvp("dmenu_run", l);
-    }
-
-}
+#include "../config.h"
 
 
 void map_notify(XEvent &e) {
@@ -84,28 +78,11 @@ void key_press(XEvent &e) {
     KeySym keysym = XKeycodeToKeysym(state.x11.display, e.xkey.keycode, 0);
     LOGF("keypreess %d", e.xkey.keycode);
 
-    if (e.xkey.state == Mod1Mask && keysym == XK_q) {
-        state.running = false;
+    for (KeyDef &keydef: keybindings) {
+        if (e.xkey.state == keydef.state && keysym == keydef.keysym) {
+            keydef.action(keydef.arg);
+        }
     }
-
-    if (e.xkey.state == Mod1Mask && keysym == XK_p) {
-        LOG("start process");
-        run();
-    }
-#if 0
-    i32 keysym = 0;
-    KeySym *k = XGetKeyboardMapping(state.x11.display,
-                                    e.xkey.keycode,
-                                    1,
-                                    &keysym);
-
-    if (k[keysym] == XK_q) {
-        state.running = false;
-    }
-    XFree(k);
-#endif
-
-    //run();
 }
 
 int main() {

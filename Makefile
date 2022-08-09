@@ -1,9 +1,11 @@
 CFLAGS=-I./libs/mflibs/src -g -Wno-deprecated-declarations
 LIBS=-lX11
 
+SRCS=src/main.cpp src/mfwm_x11.h src/mfwm_x11.cpp config.h
+
 all: build/mfwm
 
-build/mfwm: src/main.cpp src/mfwm_x11.h src/mfwm_x11.cpp
+build/mfwm: $(SRCS)
 	$(CC) $(CFLAGS) $< $(LIBS) -o $@
 
 run:
