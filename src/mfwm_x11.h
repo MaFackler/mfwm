@@ -19,12 +19,14 @@ struct X11Base {
     GC gc;
 
     XColor *colors;
-
-    void init();
-    void shutdown();
-    X11Window create_window(u32 width, u32 height);
-    void destroy_window(X11Window &window);
-    X11Color add_color(u8 r, u8 g, u8 b);
-
-    void fill_rect(X11Window &window, X11Color color);
 };
+
+void x11_init(X11Base *x11);
+void x11_shutdown(X11Base *x11);
+X11Window x11_create_window(X11Base *x11, u32 width, u32 height);
+void x11_destroy_window(X11Base *x11, X11Window &window);
+X11Color x11_add_color(X11Base *x11, u8 r, u8 g, u8 b);
+
+void x11_fill_rect(X11Base *x11, X11Window &window, X11Color color);
+
+void x11_get_window_name(X11Base *x11, Window window, char *data, u32 n);

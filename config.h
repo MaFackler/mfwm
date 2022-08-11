@@ -26,6 +26,10 @@ void quit(Arg arg) {
     state.running = false;
 }
 
+// Constants
+const i32 STATUSBAR_HEIGHT = 20;
+const i32 GAP = 10;
+
 #define MODKEY Mod1Mask  // ALT KEY
 //#define MODKEY Mod4Mask  // SUPER KEY
 
