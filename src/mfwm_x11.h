@@ -23,9 +23,12 @@ struct X11Base {
 
 void x11_init(X11Base *x11);
 void x11_shutdown(X11Base *x11);
+void x11_window_grab_key(X11Base *x11, Window window, KeySym sym, u32 mod);
+X11Color x11_add_color(X11Base *x11, u8 r, u8 g, u8 b);
+
 X11Window x11_create_window(X11Base *x11, u32 width, u32 height);
 void x11_destroy_window(X11Base *x11, X11Window &window);
-X11Color x11_add_color(X11Base *x11, u8 r, u8 g, u8 b);
+
 
 void x11_fill_rect(X11Base *x11, X11Window &window, X11Color color);
 

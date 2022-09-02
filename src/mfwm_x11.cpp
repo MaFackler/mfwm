@@ -30,6 +30,11 @@ void x11_shutdown(X11Base *x11) {
     XCloseDisplay(x11->display);
 }
 
+void x11_window_grab_key(X11Base *x11, Window window, KeySym sym, u32 mod) {
+    KeyCode code = XKeysymToKeycode(x11->display, sym);
+    XGrabKey(x11->display, code, mod, window, 1, GrabModeAsync, GrabModeAsync); 
+}
+
 X11Window x11_create_window(X11Base *x11, u32 width, u32 height) {
     XSetWindowAttributes attribs = {};
     attribs.background_pixel = ParentRelative;

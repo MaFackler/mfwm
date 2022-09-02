@@ -37,14 +37,24 @@ struct State {
 };
 
 
-#define LOG(msg) fprintf(log_file, msg "\n");
-#define LOGF(msg, ...) fprintf(log_file, msg "\n", __VA_ARGS__);
+#define LOG(msg) fprintf(log_file, msg "\n"); fflush(log_file);
+#define LOGF(msg, ...) fprintf(log_file, msg "\n", __VA_ARGS__); fflush(log_file);
 #define ERROR(msg) fprintf(stderr, msg); exit(EXIT_FAILURE);
 #define ERRORF(msg, ...) fprintf(stderr, msg, __VA_ARGS__); exit(EXIT_FAILURE);
 static State state;
 FILE *log_file = NULL;
 
 #include "../config.h"
+
+#define LOG_FUNCTION(a, b, with_window)
+
+void log_event(const char *func, Window window) {
+    char _buf[256] = {};
+    if (window) {
+        x11_get_window_name(&state.x11, window, &_buf[0], MF_ArrayLength(_buf));
+    }
+    LOGF("- EVENT - %s: %d-%s", func, window, &_buf[0])
+}
 
 bool has_window(vec(u32) windows, u32 window) {
     bool res = false;
@@ -71,19 +81,14 @@ void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
     }
 }
 
-
-void print_window_name(u32 window) {
-    char name[256];
-    x11_get_window_name(&state.x11, window, &name[0], MF_ArrayLength(name));
-    printf("name is %s\n", &name[0]);
-}
-
-
 void map_notify(XEvent &e) {
+    XMapEvent event = e.xmap;
+    log_event(__func__, event.window);
 }
 
 void map_request(XEvent &e) {
     XMapRequestEvent event = e.xmaprequest;
+    log_event(__func__, event.window);
 
     if (has_window(state.windows, event.window)) {
         screen_layout_windows(&state.x11, &state.screens[0], state.windows);
@@ -92,15 +97,14 @@ void map_request(XEvent &e) {
     XSelectInput(state.x11.display,
                  event.window,
                  EnterWindowMask | FocusChangeMask | PointerMotionMask);
-    XMapWindow(state.x11.display, e.xmap.window);
+    XMapWindow(state.x11.display, event.window);
     XSync(state.x11.display, 0);
-
-    printf("map_request\n");
 }
 
 void unmap_request(XEvent &e) {
-    printf("unmaprequest\n");
     XUnmapEvent event = e.xunmap;
+    // NOTE: unmap request not able to print window name
+    log_event(__func__, 0);
 
     i32 index = -1;
     for (i32 i = 0; i < mf_vec_size(state.windows); ++i) {
@@ -117,24 +121,18 @@ void unmap_request(XEvent &e) {
 }
 
 void configure_notify(XEvent &e) {
-    printf("configure_notify\n");
+    XConfigureEvent event = e.xconfigure;
+    log_event(__func__, event.window);
 }
 
 void configure_request(XEvent &e) {
     XWindowChanges wc = {};
     XConfigureRequestEvent event = e.xconfigurerequest;
-    printf("configure_request %lu\n", event.window);
+    log_event(__func__, event.window);
 
-#if 0
-    // TODO(mf): why do i have to do this
-    event.value_mask |= CWX | CWY;
-    MF_Assert(event.value_mask & CWX);
-    //changes.x = event.x;
-    //changes.y = event.y;
-    //changes.width = event.width;
-    //changes.height = event.height;
-#endif
 
+    // NOTE: Forward request to XConfigureWindow and create
+    // window with default properties
     wc.x = event.x;
     wc.y = event.y;
     wc.width = event.width;
@@ -153,19 +151,22 @@ void configure_request(XEvent &e) {
 }
 
 void expose(XEvent &e) {
-    LOG("expose");
+    XExposeEvent event = e.xexpose;
+    log_event(__func__, event.window);
 }
 
 void button_press(XEvent &e) {
+    XButtonPressedEvent event = e.xbutton;
+    log_event(__func__, event.window);
 }
 
 void key_press(XEvent &e) {
-    LOG("key_press");
-    KeySym keysym = XKeycodeToKeysym(state.x11.display, e.xkey.keycode, 0);
-    LOGF("keypreess %d", e.xkey.keycode);
+    XKeyPressedEvent event = e.xkey;
+    KeySym keysym = XKeycodeToKeysym(state.x11.display, event.keycode, 0);
+    log_event(__func__, event.window);
 
     for (KeyDef &keydef: keybindings) {
-        if (e.xkey.state == keydef.state && keysym == keydef.keysym) {
+        if (event.state == keydef.state && keysym == keydef.keysym) {
             keydef.action(keydef.arg);
         }
     }
@@ -175,7 +176,6 @@ int main() {
     log_file = fopen("./mfwm.log", "w");
     MF_Assert(log_file);
     LOGF("hey %d", 30);
-
 
     // X11
     x11_init(&state.x11);
@@ -201,6 +201,10 @@ int main() {
     state.statusbar = {state.screens[0].w, STATUSBAR_HEIGHT};
     state.x11_statusbar = x11_create_window(&state.x11, state.statusbar.width, state.statusbar.height);
 
+    for (KeyDef &def: keybindings) {
+        x11_window_grab_key(&state.x11, state.x11.root, def.keysym, def.state);
+    }
+
 
     while (state.running) {
         if (XPending(state.x11.display) > 0) {
@@ -208,22 +212,26 @@ int main() {
             XNextEvent(state.x11.display, &e);
 
             switch (e.type) {
-                case Expose: {
-                    x11_fill_rect(&state.x11, state.x11_statusbar, color_green);
-                } break;
                 case ButtonPress: button_press(e); break;
                 case KeyPress: key_press(e); break;
-                case MapNotify: map_notify(e); break;
-                case MapRequest: map_request(e); break;
+                case KeyRelease: break;
                 case UnmapNotify: unmap_request(e); break;
-                case ConfigureNotify: configure_notify(e); break;
-                case ConfigureRequest: configure_request(e); break;
 
                 case NoExpose: break;
 
+                // These events are in oreder of the event chain
+                case CreateNotify: break;
+                case ConfigureRequest: configure_request(e); break;
+                case ConfigureNotify: configure_notify(e); break;
+                case MapRequest: map_request(e); break;
+                case MapNotify: map_notify(e); break;
+                case Expose: {
+                    x11_fill_rect(&state.x11, state.x11_statusbar, color_green);
+                } break;
+                // --------
+
                 case MotionNotify: break;
                 case EnterNotify: break;
-                case CreateNotify: break;
                 case DestroyNotify: break;
                 case PropertyNotify: break;
 
