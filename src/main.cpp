@@ -68,14 +68,36 @@ bool has_window(vec(u32) windows, u32 window) {
 }
 
 void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
-    mf_vec_for(windows) {
+
+    i32 amount_windows = mf_vec_size(windows);
+    for (i32 i = 0; i < amount_windows; ++i) {
+        u32 window = windows[i]; 
+        char buf[256] = {};
+        x11_get_window_name(x11, window, &buf[0], MF_ArrayLength(buf));
+        LOGF("Window name is %d-%s", i, &buf[0]);
+
+        // Calculate
+        i32 window_x = screen->x + GAP;
+        i32 window_y = screen->y + STATUSBAR_HEIGHT + GAP;
+
+        i32 window_width = screen->w - 2 * GAP;
+        if (amount_windows > 1) {
+            window_width = (window_width - GAP) * 0.5;
+
+            if (i > 0) {
+                window_x += window_width + GAP;
+            }
+        }
+        i32 window_height = screen->h - (STATUSBAR_HEIGHT + 2 * GAP);
+
+        // Configure X Window
         XWindowChanges wc = {};
-        wc.x = screen->x + GAP;
-        wc.width = screen->w - 2 * GAP;
-        wc.y = screen->y + STATUSBAR_HEIGHT + GAP;
-        wc.height = screen->h - (STATUSBAR_HEIGHT + 2 * GAP);
+        wc.x = window_x;
+        wc.width = window_width;
+        wc.y = window_y;
+        wc.height = window_height;
         XConfigureWindow(x11->display,
-                         *it,
+                         window,
                          CWX | CWY | CWWidth | CWHeight,
                          &wc);
     }
@@ -106,6 +128,7 @@ void unmap_request(XEvent &e) {
     // NOTE: unmap request not able to print window name
     log_event(__func__, 0);
 
+    // TODO: introduce vec search
     i32 index = -1;
     for (i32 i = 0; i < mf_vec_size(state.windows); ++i) {
         if (event.window == state.windows[i]) {
@@ -117,6 +140,10 @@ void unmap_request(XEvent &e) {
     if (index >= 0) {
         auto size = mf_vec_size(state.windows);
         memmove(state.windows + index, state.windows + index + 1, size - index - 1);
+        auto header = mf__get_stretchy_header(state.windows);
+        header->size--;
+        screen_layout_windows(&state.x11, &state.screens[0], state.windows);
+
     }
 }
 
@@ -147,6 +174,12 @@ void configure_request(XEvent &e) {
                      &wc);
     XSync(state.x11.display, 0);
 
+    // TODO: mf_vec_search
+    mf_vec_for(state.windows) {
+        if (*it == event.window) {
+            return;
+        }
+    }
     mf_vec_push(state.windows, event.window);
 }
 
