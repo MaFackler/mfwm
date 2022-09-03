@@ -57,17 +57,6 @@ void log_event(const char *func, Window window) {
     LOGF("- EVENT - %s: %d-%s", func, window, &_buf[0])
 }
 
-bool has_window(vec(u32) windows, u32 window) {
-    bool res = false;
-    mf_vec_for(windows) {
-        if (*it == window) {
-            res = true;
-            break;
-        }
-    }
-    return res;
-}
-
 void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
 
     i32 amount_windows = mf_vec_size(windows);
@@ -81,15 +70,16 @@ void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
         i32 window_x = screen->x + GAP;
         i32 window_y = screen->y + STATUSBAR_HEIGHT + GAP;
 
+        i32 window_height = screen->h - (STATUSBAR_HEIGHT + 2 * GAP);
         i32 window_width = screen->w - 2 * GAP;
         if (amount_windows > 1) {
             window_width = (window_width - GAP) * 0.5;
-
             if (i > 0) {
                 window_x += window_width + GAP;
+                window_height /= (amount_windows - 1);
+                window_y += window_height * (i - 1);
             }
         }
-        i32 window_height = screen->h - (STATUSBAR_HEIGHT + 2 * GAP);
 
         // Configure X Window
         XWindowChanges wc = {};
@@ -113,7 +103,7 @@ void map_request(XEvent &e) {
     XMapRequestEvent event = e.xmaprequest;
     log_event(__func__, event.window);
 
-    if (has_window(state.windows, event.window)) {
+    if (mf_vec_index(state.windows, (u32) event.window) >= 0) {
         screen_layout_windows(&state.x11, &state.screens[0], state.windows);
     }
 
@@ -237,7 +227,7 @@ int main() {
 
                 case NoExpose: break;
 
-                // These events are in oreder of the event chain
+                // These events are in order of the event chain
                 case CreateNotify: break;
                 case ConfigureRequest: configure_request(e); break;
                 case ConfigureNotify: configure_notify(e); break;
