@@ -8,6 +8,7 @@
 #include <mf.h>
 #define MF_VECTOR_IMPLEMENTATION
 #include <mf_vector.h>
+#include <mf_string.h>
 #include "mfwm_x11.h"
 #include "mfwm_x11.cpp"
 
@@ -72,9 +73,9 @@ void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
     i32 amount_windows = mf_vec_size(windows);
     for (i32 i = 0; i < amount_windows; ++i) {
         u32 window = windows[i]; 
-        char buf[256] = {};
-        x11_get_window_name(x11, window, &buf[0], MF_ArrayLength(buf));
-        LOGF("Window name is %d-%s", i, &buf[0]);
+        mf_str buf = mf_str_stack(256);
+        x11_get_window_name(x11, window, buf.data, buf.size);
+        LOGF("Window name is %d-%s", i, &buf.data);
 
         // Calculate
         i32 window_x = screen->x + GAP;
@@ -128,22 +129,10 @@ void unmap_request(XEvent &e) {
     // NOTE: unmap request not able to print window name
     log_event(__func__, 0);
 
-    // TODO: introduce vec search
-    i32 index = -1;
-    for (i32 i = 0; i < mf_vec_size(state.windows); ++i) {
-        if (event.window == state.windows[i]) {
-            index = i;
-            break;
-        }
-    }
-
+    i32 index = mf_vec_index(state.windows, (u32) event.window);
     if (index >= 0) {
-        auto size = mf_vec_size(state.windows);
-        memmove(state.windows + index, state.windows + index + 1, size - index - 1);
-        auto header = mf__get_stretchy_header(state.windows);
-        header->size--;
+        mf_vec_delete(state.windows, index);
         screen_layout_windows(&state.x11, &state.screens[0], state.windows);
-
     }
 }
 
@@ -174,13 +163,9 @@ void configure_request(XEvent &e) {
                      &wc);
     XSync(state.x11.display, 0);
 
-    // TODO: mf_vec_search
-    mf_vec_for(state.windows) {
-        if (*it == event.window) {
-            return;
-        }
+    if (mf_vec_index(state.windows, (u32) event.window) == -1) {
+        mf_vec_push(state.windows, event.window);
     }
-    mf_vec_push(state.windows, event.window);
 }
 
 void expose(XEvent &e) {
