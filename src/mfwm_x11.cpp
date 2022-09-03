@@ -23,6 +23,16 @@ void x11_init(X11Base *x11) {
     x11->gc = XDefaultGC(x11->display, x11->screen);
     x11->colormap = XDefaultColormap(x11->display, x11->screen);
     XSetFillStyle(x11->display, x11->gc, FillSolid);
+
+    i32 n = 0;
+    char **fonts = XListFonts(x11->display, "*", 256, &n);
+    assert(n > 0);
+    // TODO: move to xft for better fonts
+    //x11->font = XftFontOpenName(x11->display, x11->screen, fontname);
+    x11->font = XLoadQueryFont(x11->display, fonts[0]);
+    assert(x11->font);
+    x11->font_height = x11->font->ascent + x11->font->descent;
+    XFreeFontNames(fonts);
 }
 
 void x11_shutdown(X11Base *x11) {
@@ -71,10 +81,16 @@ X11Color x11_add_color(X11Base *x11, u8 r, u8 g, u8 b) {
     return res;
 }
 
-void x11_fill_rect(X11Base *x11, X11Window &window, X11Color color) {
+void x11_fill_rect(X11Base *x11, X11Window &window, i32 x, i32 y, u32 w, u32 h, X11Color color) {
     XSetForeground(x11->display, x11->gc, x11->colors[color].pixel);
     XSetBackground(x11->display, x11->gc, x11->colors[color].pixel);
-    XFillRectangle(x11->display, window.draw, x11->gc, 0, 0, window.width, window.height);
+    XFillRectangle(x11->display, window.draw, x11->gc, x, y, w, h);
+    XCopyArea(x11->display, window.draw, window.window, x11->gc, 0, 0, window.width, window.height, 0, 0);
+}
+
+void x11_draw_text(X11Base *x11, X11Window &window, i32 x, i32 y, const char *text, u64 n, X11Color color) {
+    XSetForeground(x11->display, x11->gc, x11->colors[color].pixel);
+    XDrawString(x11->display, window.draw, x11->gc, x, y, text, n);
     XCopyArea(x11->display, window.draw, window.window, x11->gc, 0, 0, window.width, window.height, 0, 0);
 }
 
@@ -109,4 +125,8 @@ void x11_get_window_name(X11Base *x11, Window window, char *data, u32 n) {
         XFree(name.value);
     }
 #endif
+}
+
+i32 x11_get_text_width(X11Base *x11, const char *text, u32 n) {
+    return XTextWidth(x11->font, text, n);
 }

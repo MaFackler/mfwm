@@ -3,11 +3,13 @@
 #include <X11/keysym.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
+//#include <X11/Xft/Xft.h>
 #include <X11/extensions/Xinerama.h>
 
 #include <mf.h>
 #define MF_VECTOR_IMPLEMENTATION
 #include <mf_vector.h>
+#define MF_STRING_IMPLEMENTATION
 #include <mf_string.h>
 #include "mfwm_x11.h"
 #include "mfwm_x11.cpp"
@@ -29,12 +31,16 @@ struct State {
     // X11 Interface stuff
     X11Base x11;
     X11Window x11_statusbar;
+    X11Color color_green;
+    X11Color color_red;
 
     // Datastructures
     Statusbar statusbar;
 
-    vec(u32) windows;
-    vec(Rect) screens;
+    vec(u32) windows = NULL;
+    vec(Rect) screens = NULL;
+
+    vec(mf_str) window_names = NULL;
 };
 
 
@@ -42,12 +48,14 @@ struct State {
 #define LOGF(msg, ...) fprintf(log_file, msg "\n", __VA_ARGS__); fflush(log_file);
 #define ERROR(msg) fprintf(stderr, msg); exit(EXIT_FAILURE);
 #define ERRORF(msg, ...) fprintf(stderr, msg, __VA_ARGS__); exit(EXIT_FAILURE);
-static State state;
+static State state = {};
 FILE *log_file = NULL;
 
 #include "../config.h"
 
 #define LOG_FUNCTION(a, b, with_window)
+
+void render();
 
 void log_event(const char *func, Window window) {
     char _buf[256] = {};
@@ -63,7 +71,8 @@ void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
     for (i32 i = 0; i < amount_windows; ++i) {
         u32 window = windows[i]; 
         mf_str buf = mf_str_stack(256);
-        x11_get_window_name(x11, window, buf.data, buf.size);
+        x11_get_window_name(x11, window, buf.data, buf.capacity);
+        buf.size = strlen(buf.data);
         LOGF("Window name is %d-%s", i, &buf.data);
 
         // Calculate
@@ -97,6 +106,7 @@ void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
 void map_notify(XEvent &e) {
     XMapEvent event = e.xmap;
     log_event(__func__, event.window);
+    render();
 }
 
 void map_request(XEvent &e) {
@@ -123,7 +133,10 @@ void unmap_request(XEvent &e) {
     if (index >= 0) {
         mf_vec_delete(state.windows, index);
         screen_layout_windows(&state.x11, &state.screens[0], state.windows);
+        mf_vec_delete(state.window_names, index);
     }
+
+    render();
 }
 
 void configure_notify(XEvent &e) {
@@ -155,6 +168,10 @@ void configure_request(XEvent &e) {
 
     if (mf_vec_index(state.windows, (u32) event.window) == -1) {
         mf_vec_push(state.windows, event.window);
+        mf_str s = mf_str_new(256);
+        x11_get_window_name(&state.x11, event.window, s.data, s.capacity);
+        s.size = strlen(s.data);
+        mf_vec_push(state.window_names, s);
     }
 }
 
@@ -180,19 +197,63 @@ void key_press(XEvent &e) {
     }
 }
 
+void render() {
+    x11_fill_rect(&state.x11, state.x11_statusbar,
+                  0, 0,
+                  state.x11_statusbar.width, state.x11_statusbar.height,
+                  state.color_green);
+
+
+    X11Color &button_color = state.color_red;
+    X11Color &font_color = state.color_green;
+    i32 x_margin = 5;
+    i32 spacing = 1;
+    i32 x = spacing;
+    i32 h = state.x11_statusbar.height - 2 * spacing;
+    for (i32 i = 0; i < MF_ArrayLength(tags); ++i) {
+        mf_strview text = S(tags[i]);
+        i32 w = x11_get_text_width(&state.x11, text.data, text.size);
+        i32 w_total = w + x_margin * 2;
+        x11_fill_rect(&state.x11, state.x11_statusbar,
+                      x, spacing, w_total, h, button_color);
+
+        // TODO: Center Text
+        x11_draw_text(&state.x11, state.x11_statusbar, x + x_margin,
+                      state.x11.font_height,
+                      text.data, text.size, font_color);
+
+        x += w_total + spacing;
+    }
+    x += 100;
+
+    for (i32 i = 0; i < mf_vec_size(state.window_names); ++i) {
+        mf_str &text = state.window_names[i];
+        i32 w = x11_get_text_width(&state.x11, text.data, text.size);
+        i32 w_total = w + x_margin * 2;
+        x11_fill_rect(&state.x11, state.x11_statusbar,
+                      x, 0, w, w, button_color);
+        // TODO: Center Text
+        x11_draw_text(&state.x11, state.x11_statusbar,
+                      x + x_margin, state.x11.font_height,
+                      text.data, text.size, font_color);
+        x += w + spacing;
+    }
+    XSync(state.x11.display, True);
+}
+
 int main() {
     log_file = fopen("./mfwm.log", "w");
     MF_Assert(log_file);
-    LOGF("hey %d", 30);
 
     // X11
     x11_init(&state.x11);
-    X11Color color_red = x11_add_color(&state.x11, 255, 0, 0);
-    X11Color color_green = x11_add_color(&state.x11, 0, 255, 0);
+    state.color_red = x11_add_color(&state.x11, 255, 0, 0);
+    state.color_green = x11_add_color(&state.x11, 0, 255, 0);
 
     bool isActive = XineramaIsActive(state.x11.display);
     i32 num_screens = 0;
     XineramaScreenInfo *info = XineramaQueryScreens(state.x11.display, &num_screens);
+
 
     for (i32 i = 0; i < num_screens; ++i) {
         mf_vec_push(state.screens, ((Rect) {
@@ -203,7 +264,6 @@ int main() {
         }));
     }
     MF_Assert(mf_vec_size(state.screens) == 1);
-    printf("Got screen %d+%d %dx%d\n", state.screens[0].x, state.screens[0].y, state.screens[0].w, state.screens[0].h);
 
     // Setup datastructures
     state.statusbar = {state.screens[0].w, STATUSBAR_HEIGHT};
@@ -212,7 +272,6 @@ int main() {
     for (KeyDef &def: keybindings) {
         x11_window_grab_key(&state.x11, state.x11.root, def.keysym, def.state);
     }
-
 
     while (state.running) {
         if (XPending(state.x11.display) > 0) {
@@ -233,9 +292,7 @@ int main() {
                 case ConfigureNotify: configure_notify(e); break;
                 case MapRequest: map_request(e); break;
                 case MapNotify: map_notify(e); break;
-                case Expose: {
-                    x11_fill_rect(&state.x11, state.x11_statusbar, color_green);
-                } break;
+                case Expose: render(); break;
                 // --------
 
                 case MotionNotify: break;
@@ -246,6 +303,7 @@ int main() {
                 case FocusIn: break;
                 case FocusOut: break;
                 case ClientMessage: break;
+                case MappingNotify: break;
                 default: ERRORF("Unhandled event %d\n", e.type); break;
 
             }

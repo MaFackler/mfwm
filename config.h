@@ -33,6 +33,9 @@ const i32 GAP = 10;
 #define MODKEY Mod1Mask  // ALT KEY
 //#define MODKEY Mod4Mask  // SUPER KEY
 
+const char* tags[] = {
+    "1", "2", "3"
+};
 
 static KeyDef keybindings[] = {
     { MODKEY, XK_p, run , "dmenu_run"},
