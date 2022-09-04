@@ -44,6 +44,8 @@ struct State {
     // Datastructures
     Statusbar statusbar;
 
+    i32 selected_window = 0;
+    i32 selected_tag = 0;
     vec(u32) windows = NULL;
     vec(Rect) screens = NULL;
 
@@ -77,10 +79,12 @@ void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
     i32 amount_windows = mf_vec_size(windows);
     for (i32 i = 0; i < amount_windows; ++i) {
         u32 window = windows[i]; 
-        mf_str buf = mf_str_stack(256);
-        x11_get_window_name(x11, window, buf.data, buf.capacity);
-        buf.size = strlen(buf.data);
-        LOGF("Window name is %d-%s", i, &buf.data);
+        // TODO: mf_str seems to not work
+        LOGF("Window name is nr=%d id=%d-%s", i, window, "");
+        //mf_str buf = mf_str_stack(256);
+        char buf[256] = {};
+        //x11_get_window_name(x11, window, &buf[0], 256);
+        //buf.size = strlen(buf.data);
 
         // Calculate
         i32 window_x = screen->x + GAP;
@@ -113,6 +117,7 @@ void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
 void map_notify(XEvent &e) {
     XMapEvent event = e.xmap;
     log_event(__func__, event.window);
+    x11_window_focus(&state.x11, event.window);
     render();
 }
 
@@ -136,11 +141,14 @@ void unmap_request(XEvent &e) {
     // NOTE: unmap request not able to print window name
     log_event(__func__, 0);
 
+    LOGF("umap_request window %d", event.window);
     i32 index = mf_vec_index(state.windows, (u32) event.window);
     if (index >= 0) {
         mf_vec_delete(state.windows, index);
-        screen_layout_windows(&state.x11, &state.screens[0], state.windows);
         mf_vec_delete(state.window_names, index);
+        screen_layout_windows(&state.x11, &state.screens[0], state.windows);
+        state.selected_window = MF_Min(index, mf_vec_size(state.windows) - 1);
+        x11_window_focus(&state.x11, state.windows[state.selected_window]);
     }
 
     render();
@@ -174,11 +182,12 @@ void configure_request(XEvent &e) {
     XSync(state.x11.display, 0);
 
     if (mf_vec_index(state.windows, (u32) event.window) == -1) {
-        mf_vec_push(state.windows, event.window);
+        u32 index = mf_vec_push(state.windows, event.window);
         mf_str s = mf_str_new(256);
         x11_get_window_name(&state.x11, event.window, s.data, s.capacity);
         s.size = strlen(s.data);
         mf_vec_push(state.window_names, s);
+        state.selected_window = index;
     }
 }
 
@@ -200,6 +209,7 @@ void key_press(XEvent &e) {
     for (KeyDef &keydef: keybindings) {
         if (event.state == keydef.state && keysym == keydef.keysym) {
             keydef.action(keydef.arg);
+            render();
         }
     }
 }
@@ -221,8 +231,7 @@ void render() {
         i32 w_total = w + x_margin * 2;
 
         X11Color c = state.color_button_tag_bg;
-        if (i == 0) {
-            // TODO: selected button
+        if (i == state.selected_tag) {
             c = state.color_button_selected_tag_bg;
         }
 
@@ -243,8 +252,7 @@ void render() {
         i32 w = x11_get_text_width(&state.x11, text.data, text.size);
         i32 w_total = w + x_margin * 2;
         X11Color c = state.color_button_window_bg;
-        if (i == 0) {
-            // TODO: selected button
+        if (i == state.selected_window) {
             c = state.color_button_selected_window_bg;
         }
 
@@ -257,7 +265,7 @@ void render() {
                       text.data, text.size, state.color_button_window_fg);
         x += w + spacing;
     }
-    XSync(state.x11.display, True);
+    //XSync(state.x11.display, False);
 }
 
 int main() {
@@ -270,10 +278,10 @@ int main() {
     // TODO: What to do with alpha
     // TODO: move this to config
     state.color_bar_bg = x11_add_color(&state.x11, 0x28282800);
-    state.color_button_tag_bg = x11_add_color(&state.x11, 0x83a59800);
-    state.color_button_selected_tag_bg = x11_add_color(&state.x11, 0x45858800);
-    state.color_button_window_bg = x11_add_color(&state.x11, 0x8ec07c00);
-    state.color_button_selected_window_bg = x11_add_color(&state.x11, 0x689d6a00);
+    state.color_button_selected_tag_bg = x11_add_color(&state.x11, 0x83a59800);
+    state.color_button_tag_bg = x11_add_color(&state.x11, 0x45858800);
+    state.color_button_selected_window_bg = x11_add_color(&state.x11, 0x8ec07c00);
+    state.color_button_window_bg = x11_add_color(&state.x11, 0x689d6a00);
 
     state.color_button_tag_fg = x11_add_color(&state.x11, 0x0000000000);
     state.color_button_tag_fg = x11_add_color(&state.x11, 0x0000000000);
@@ -296,7 +304,7 @@ int main() {
 
     // Setup datastructures
     state.statusbar = {state.screens[0].w, STATUSBAR_HEIGHT};
-    state.x11_statusbar = x11_create_window(&state.x11, state.statusbar.width, state.statusbar.height);
+    state.x11_statusbar = x11_window_create(&state.x11, state.statusbar.width, state.statusbar.height);
 
     for (KeyDef &def: keybindings) {
         x11_window_grab_key(&state.x11, state.x11.root, def.keysym, def.state);
@@ -340,7 +348,7 @@ int main() {
     }
 
     fclose(log_file);
-    x11_destroy_window(&state.x11, state.x11_statusbar);
+    x11_window_destroy(&state.x11, state.x11_statusbar);
     x11_shutdown(&state.x11);
 }
 

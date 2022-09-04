@@ -45,7 +45,7 @@ void x11_window_grab_key(X11Base *x11, Window window, KeySym sym, u32 mod) {
     XGrabKey(x11->display, code, mod, window, 1, GrabModeAsync, GrabModeAsync); 
 }
 
-X11Window x11_create_window(X11Base *x11, u32 width, u32 height) {
+X11Window x11_window_create(X11Base *x11, u32 width, u32 height) {
     XSetWindowAttributes attribs = {};
     attribs.background_pixel = ParentRelative;
     attribs.event_mask = ButtonPressMask | ExposureMask;
@@ -66,8 +66,12 @@ X11Window x11_create_window(X11Base *x11, u32 width, u32 height) {
     return res;
 };
 
-void x11_destroy_window(X11Base *x11, X11Window &window) {
+void x11_window_destroy(X11Base *x11, X11Window &window) {
     XFreePixmap(x11->display, window.draw);
+}
+
+void x11_window_focus(X11Base *x11, Window window) {
+    XSetInputFocus(x11->display, window, PointerRoot, CurrentTime);
 }
 
 X11Color x11_add_color(X11Base *x11, u8 r, u8 g, u8 b) {
