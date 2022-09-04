@@ -31,8 +31,15 @@ struct State {
     // X11 Interface stuff
     X11Base x11;
     X11Window x11_statusbar;
-    X11Color color_green;
-    X11Color color_red;
+
+    X11Color color_bar_bg;
+    X11Color color_button_tag_bg;
+    X11Color color_button_selected_tag_bg;
+    X11Color color_button_tag_fg;
+
+    X11Color color_button_window_bg;
+    X11Color color_button_selected_window_bg;
+    X11Color color_button_window_fg;
 
     // Datastructures
     Statusbar statusbar;
@@ -201,11 +208,9 @@ void render() {
     x11_fill_rect(&state.x11, state.x11_statusbar,
                   0, 0,
                   state.x11_statusbar.width, state.x11_statusbar.height,
-                  state.color_green);
+                  state.color_bar_bg);
 
 
-    X11Color &button_color = state.color_red;
-    X11Color &font_color = state.color_green;
     i32 x_margin = 5;
     i32 spacing = 1;
     i32 x = spacing;
@@ -214,13 +219,20 @@ void render() {
         mf_strview text = S(tags[i]);
         i32 w = x11_get_text_width(&state.x11, text.data, text.size);
         i32 w_total = w + x_margin * 2;
+
+        X11Color c = state.color_button_tag_bg;
+        if (i == 0) {
+            // TODO: selected button
+            c = state.color_button_selected_tag_bg;
+        }
+
         x11_fill_rect(&state.x11, state.x11_statusbar,
-                      x, spacing, w_total, h, button_color);
+                      x, spacing, w_total, h, c);
 
         // TODO: Center Text
         x11_draw_text(&state.x11, state.x11_statusbar, x + x_margin,
                       state.x11.font_height,
-                      text.data, text.size, font_color);
+                      text.data, text.size, state.color_button_tag_fg);
 
         x += w_total + spacing;
     }
@@ -230,12 +242,19 @@ void render() {
         mf_str &text = state.window_names[i];
         i32 w = x11_get_text_width(&state.x11, text.data, text.size);
         i32 w_total = w + x_margin * 2;
+        X11Color c = state.color_button_window_bg;
+        if (i == 0) {
+            // TODO: selected button
+            c = state.color_button_selected_window_bg;
+        }
+
         x11_fill_rect(&state.x11, state.x11_statusbar,
-                      x, 0, w, w, button_color);
+                      x, 0, w, w, c);
+
         // TODO: Center Text
         x11_draw_text(&state.x11, state.x11_statusbar,
                       x + x_margin, state.x11.font_height,
-                      text.data, text.size, font_color);
+                      text.data, text.size, state.color_button_window_fg);
         x += w + spacing;
     }
     XSync(state.x11.display, True);
@@ -247,8 +266,18 @@ int main() {
 
     // X11
     x11_init(&state.x11);
-    state.color_red = x11_add_color(&state.x11, 255, 0, 0);
-    state.color_green = x11_add_color(&state.x11, 0, 255, 0);
+
+    // TODO: What to do with alpha
+    // TODO: move this to config
+    state.color_bar_bg = x11_add_color(&state.x11, 0x28282800);
+    state.color_button_tag_bg = x11_add_color(&state.x11, 0x83a59800);
+    state.color_button_selected_tag_bg = x11_add_color(&state.x11, 0x45858800);
+    state.color_button_window_bg = x11_add_color(&state.x11, 0x8ec07c00);
+    state.color_button_selected_window_bg = x11_add_color(&state.x11, 0x689d6a00);
+
+    state.color_button_tag_fg = x11_add_color(&state.x11, 0x0000000000);
+    state.color_button_tag_fg = x11_add_color(&state.x11, 0x0000000000);
+    state.color_button_window_fg = x11_add_color(&state.x11, 0x0000000000);
 
     bool isActive = XineramaIsActive(state.x11.display);
     i32 num_screens = 0;

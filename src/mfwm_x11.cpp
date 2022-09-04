@@ -81,6 +81,15 @@ X11Color x11_add_color(X11Base *x11, u8 r, u8 g, u8 b) {
     return res;
 }
 
+X11Color x11_add_color(X11Base *x11, u32 color) {
+    u8 r = (color >> 24) & 0xFF;
+    u8 g = (color >> 16) & 0xFF;
+    u8 b = (color >> 8) & 0xFF;
+    printf("%d %d %d\n", r, g, b);
+    X11Color res = x11_add_color(x11, r, g, b);
+    return res;
+}
+
 void x11_fill_rect(X11Base *x11, X11Window &window, i32 x, i32 y, u32 w, u32 h, X11Color color) {
     XSetForeground(x11->display, x11->gc, x11->colors[color].pixel);
     XSetBackground(x11->display, x11->gc, x11->colors[color].pixel);
