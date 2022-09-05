@@ -34,6 +34,8 @@ X11Color x11_add_color(X11Base *x11, u32 color);
 X11Window x11_window_create(X11Base *x11, u32 width, u32 height);
 void x11_window_destroy(X11Base *x11, X11Window &window);
 void x11_window_focus(X11Base *x11, Window window);
+void x11_window_move(X11Base *x11, Window window, i32 x, i32 y);
+void x11_window_hide(X11Base *x11, Window window);
 
 // TODO: why reference?
 void x11_fill_rect(X11Base *x11, X11Window &window, i32 x, i32 y, u32 w, u32 h, X11Color color);

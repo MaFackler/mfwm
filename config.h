@@ -1,7 +1,8 @@
 #pragma once
 
 union Arg {
-    const char* string;
+    const char* String;
+    i32 Int;
 };
 
 typedef void (*Action)(Arg arg);
@@ -16,9 +17,9 @@ struct KeyDef {
 
 void run(Arg arg) {
     if (fork() == 0) {
-        char * l[] = {(char *) arg.string, NULL};
+        char * l[] = {(char *) arg.String, NULL};
         setsid();
-        execvp(arg.string, l);
+        execvp(arg.String, l);
     }
 }
 
@@ -27,22 +28,24 @@ void quit(Arg arg) {
 }
 
 void select_next_window(Arg arg) {
-    u32 amount_windows = mf_vec_size(state.windows);
+    Tag *tag = state_get_current_tag(&state);
+    u32 amount_windows = mf_vec_size(tag->windows);
     if (amount_windows > 0) {
-        state.selected_window = MF_Min(state.selected_window + 1,
-                                       amount_windows - 1);
-        x11_window_focus(&state.x11, state.windows[state.selected_window]);
+        tag->selected_window = MF_Min(tag->selected_window + 1, amount_windows - 1);
+        x11_window_focus(&state.x11, tag->windows[tag->selected_window]);
     }
 }
 
 void select_previous_window(Arg arg) {
-    u32 amount_windows = mf_vec_size(state.windows);
+    Tag *tag = state_get_current_tag(&state);
+    u32 amount_windows = mf_vec_size(tag->windows);
     if (amount_windows > 0) {
-        state.selected_window = MF_Max(state.selected_window - 1,
-                                       0);
-        x11_window_focus(&state.x11, state.windows[state.selected_window]);
+        tag->selected_window = MF_Max(tag->selected_window - 1, 0);
+        x11_window_focus(&state.x11, tag->windows[tag->selected_window]);
     }
+
 }
+
 
 // Constants
 const i32 STATUSBAR_HEIGHT = 20;
@@ -55,10 +58,28 @@ const char* tags[] = {
     "1", "2", "3"
 };
 
+void select_next_tag(Arg arg) {
+    assert(MF_ArrayLength(tags) > 0);
+    state.selected_tag = mf_clamp(state.selected_tag + 1, 0, (i32) MF_ArrayLength(tags) - 1); 
+}
+
+void select_previous_tag(Arg arg) {
+    assert(MF_ArrayLength(tags) > 0);
+    state.selected_tag = mf_clamp(state.selected_tag - 1, 0, (i32) MF_ArrayLength(tags) - 1); 
+}
+
+void select_tag_nr(Arg arg) {
+    state_select_tag(&state, arg.Int);
+}
+
 static KeyDef keybindings[] = {
     { MODKEY, XK_q, quit },
     { MODKEY, XK_j, select_next_window },
     { MODKEY, XK_k, select_previous_window },
+
+    { MODKEY, XK_1, select_tag_nr, {.Int=0} },
+    { MODKEY, XK_2, select_tag_nr, {.Int=1} },
+    { MODKEY, XK_3, select_tag_nr, {.Int=2} },
 
     // Applications
     { MODKEY, XK_p, run , "dmenu_run"},

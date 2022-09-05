@@ -74,6 +74,14 @@ void x11_window_focus(X11Base *x11, Window window) {
     XSetInputFocus(x11->display, window, PointerRoot, CurrentTime);
 }
 
+void x11_window_move(X11Base *x11, Window window, i32 x, i32 y) {
+    XMoveWindow(x11->display, window, x, y);
+}
+
+void x11_window_hide(X11Base *x11, Window window) {
+    x11_window_move(x11, window, -4000, 0);
+}
+
 X11Color x11_add_color(X11Base *x11, u8 r, u8 g, u8 b) {
     X11Color res = mf_vec_size(x11->colors);
     XColor *color = mf_vec_add(x11->colors);

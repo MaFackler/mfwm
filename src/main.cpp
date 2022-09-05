@@ -11,6 +11,8 @@
 #include <mf_vector.h>
 #define MF_STRING_IMPLEMENTATION
 #include <mf_string.h>
+#define MF_MATH_IMPLEMENTATION
+#include <mf_math.h>
 #include "mfwm_x11.h"
 #include "mfwm_x11.cpp"
 
@@ -25,6 +27,23 @@ struct Statusbar {
     i32 width;
     i32 height;
 };
+
+struct Tag {
+    const char *name;
+    i32 selected_window = 0;
+    vec(u32) windows = NULL;
+    vec(mf_str) window_names = NULL;
+};
+
+bool tag_has_windows(Tag *tag) {
+    return mf_vec_size(tag->windows) > 0;
+}
+
+u32 tag_get_selected_window(Tag *tag) {
+    return tag->windows[tag->selected_window];
+}
+
+void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows);
 
 struct State {
     bool running = true;
@@ -44,13 +63,47 @@ struct State {
     // Datastructures
     Statusbar statusbar;
 
-    i32 selected_window = 0;
     i32 selected_tag = 0;
-    vec(u32) windows = NULL;
+
+    vec(Tag) tags = NULL;
+
     vec(Rect) screens = NULL;
 
-    vec(mf_str) window_names = NULL;
 };
+
+inline Tag* state_get_current_tag(State *state) {
+    return &state->tags[state->selected_tag];    
+}
+
+void state_push_window(State *state, u32 window) {
+    Tag *tag = &state->tags[state->selected_tag];
+    u32 index = mf_vec_push(tag->windows, window);
+    mf_str s = mf_str_new(256);
+    x11_get_window_name(&state->x11, window, s.data, s.capacity);
+    s.size = strlen(s.data);
+    mf_vec_push(tag->window_names, s);
+
+    tag->selected_window = index;
+}
+
+void state_delete_window(State *state, u32 window) {
+}
+
+void state_select_tag(State *state, u32 tag_index) {
+    assert(tag_index < mf_vec_size(state->tags));
+    Tag *tag = state_get_current_tag(state);
+    mf_vec_for(tag->windows) {
+        x11_window_hide(&state->x11, *it);
+    }
+    state->selected_tag = tag_index;
+
+    tag = state_get_current_tag(state);
+    screen_layout_windows(&state->x11, &state->screens[0], tag->windows);
+
+    if (tag_has_windows(tag)) {
+        x11_window_focus(&state->x11, tag_get_selected_window(tag));
+    }
+}
 
 
 #define LOG(msg) fprintf(log_file, msg "\n"); fflush(log_file);
@@ -125,8 +178,9 @@ void map_request(XEvent &e) {
     XMapRequestEvent event = e.xmaprequest;
     log_event(__func__, event.window);
 
-    if (mf_vec_index(state.windows, (u32) event.window) >= 0) {
-        screen_layout_windows(&state.x11, &state.screens[0], state.windows);
+    Tag *tag = state_get_current_tag(&state);
+    if (mf_vec_index(tag->windows, (u32) event.window) >= 0) {
+        screen_layout_windows(&state.x11, &state.screens[0], tag->windows);
     }
 
     XSelectInput(state.x11.display,
@@ -142,13 +196,15 @@ void unmap_request(XEvent &e) {
     log_event(__func__, 0);
 
     LOGF("umap_request window %d", event.window);
-    i32 index = mf_vec_index(state.windows, (u32) event.window);
+    Tag *tag = state_get_current_tag(&state);
+    i32 index = mf_vec_index(tag->windows, (u32) event.window);
     if (index >= 0) {
-        mf_vec_delete(state.windows, index);
-        mf_vec_delete(state.window_names, index);
-        screen_layout_windows(&state.x11, &state.screens[0], state.windows);
-        state.selected_window = MF_Min(index, mf_vec_size(state.windows) - 1);
-        x11_window_focus(&state.x11, state.windows[state.selected_window]);
+        mf_vec_delete(tag->windows, index);
+        mf_str *s = mf_vec_delete(tag->window_names, index);
+        mf_str_free(*s);
+        screen_layout_windows(&state.x11, &state.screens[0], tag->windows);
+        tag->selected_window = MF_Min(index, mf_vec_size(tag->windows) - 1);
+        x11_window_focus(&state.x11, tag->windows[tag->selected_window]);
     }
 
     render();
@@ -181,13 +237,9 @@ void configure_request(XEvent &e) {
                      &wc);
     XSync(state.x11.display, 0);
 
-    if (mf_vec_index(state.windows, (u32) event.window) == -1) {
-        u32 index = mf_vec_push(state.windows, event.window);
-        mf_str s = mf_str_new(256);
-        x11_get_window_name(&state.x11, event.window, s.data, s.capacity);
-        s.size = strlen(s.data);
-        mf_vec_push(state.window_names, s);
-        state.selected_window = index;
+    Tag *tag = state_get_current_tag(&state);
+    if (mf_vec_index(tag->windows, (u32) event.window) == -1) {
+        state_push_window(&state, event.window);
     }
 }
 
@@ -247,12 +299,13 @@ void render() {
     }
     x += 100;
 
-    for (i32 i = 0; i < mf_vec_size(state.window_names); ++i) {
-        mf_str &text = state.window_names[i];
+    Tag *tag = state_get_current_tag(&state);
+    for (i32 i = 0; i < mf_vec_size(tag->window_names); ++i) {
+        mf_str &text = tag->window_names[i];
         i32 w = x11_get_text_width(&state.x11, text.data, text.size);
         i32 w_total = w + x_margin * 2;
         X11Color c = state.color_button_window_bg;
-        if (i == state.selected_window) {
+        if (i == tag->selected_window) {
             c = state.color_button_selected_window_bg;
         }
 
@@ -303,6 +356,12 @@ int main() {
     MF_Assert(mf_vec_size(state.screens) == 1);
 
     // Setup datastructures
+    for (i32 i = 0; i < MF_ArrayLength(tags); ++i) {
+        Tag *tag = mf_vec_add(state.tags);
+        tag->name = tags[i];
+        tag->window_names = NULL;
+        tag->windows = NULL;
+    }
     state.statusbar = {state.screens[0].w, STATUSBAR_HEIGHT};
     state.x11_statusbar = x11_window_create(&state.x11, state.statusbar.width, state.statusbar.height);
 

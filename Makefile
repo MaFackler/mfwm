@@ -1,5 +1,5 @@
 CFLAGS=-I./libs/mflibs/src -g -Wno-deprecated-declarations
-LIBS=-lX11 -lXinerama
+LIBS=-lX11 -lXinerama -lm
 SRCS=src/main.cpp src/mfwm_x11.h src/mfwm_x11.cpp config.h
 
 # CONTANTS
