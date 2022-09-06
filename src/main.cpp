@@ -132,12 +132,10 @@ void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
     i32 amount_windows = mf_vec_size(windows);
     for (i32 i = 0; i < amount_windows; ++i) {
         u32 window = windows[i]; 
-        // TODO: mf_str seems to not work
-        LOGF("Window name is nr=%d id=%d-%s", i, window, "");
-        //mf_str buf = mf_str_stack(256);
-        char buf[256] = {};
-        //x11_get_window_name(x11, window, &buf[0], 256);
-        //buf.size = strlen(buf.data);
+        mf_str buf = mf_str_stack(256);
+        x11_get_window_name(x11, window, buf.data, buf.capacity);
+        buf.size = strlen(buf.data);
+        LOGF("Window name is nr=%d id=%d-%s", i, window, buf.data);
 
         // Calculate
         i32 window_x = screen->x + GAP;
@@ -204,7 +202,9 @@ void unmap_request(XEvent &e) {
         mf_str_free(*s);
         screen_layout_windows(&state.x11, &state.screens[0], tag->windows);
         tag->selected_window = MF_Min(index, mf_vec_size(tag->windows) - 1);
-        x11_window_focus(&state.x11, tag->windows[tag->selected_window]);
+        if (tag_has_windows(tag)) {
+            x11_window_focus(&state.x11, tag_get_selected_window(tag));
+        }
     }
 
     render();
