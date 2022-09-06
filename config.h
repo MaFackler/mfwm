@@ -72,6 +72,21 @@ void select_tag_nr(Arg arg) {
     state_select_tag(&state, arg.Int);
 }
 
+struct ColorSchemeDefinition {
+    u32 fg;
+    u32 bg;
+};
+
+enum {
+    ColorSchemeTags,
+    ColorSchemeWindows,
+};
+
+static const ColorSchemeDefinition color_schemes[][2] = {
+    [ColorSchemeTags] = {{ 0x0, 0x45858800 }, {0x0, 0x83a59800}},
+    [ColorSchemeWindows] = {{ 0x0, 0x689d6a00 }, {0x0, 0x8ec07c00}},
+};
+
 static KeyDef keybindings[] = {
     { MODKEY, XK_q, quit },
     { MODKEY, XK_j, select_next_window },

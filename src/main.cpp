@@ -329,16 +329,15 @@ int main() {
     x11_init(&state.x11);
 
     // TODO: What to do with alpha
-    // TODO: move this to config
     state.color_bar_bg = x11_add_color(&state.x11, 0x28282800);
-    state.color_button_selected_tag_bg = x11_add_color(&state.x11, 0x83a59800);
-    state.color_button_tag_bg = x11_add_color(&state.x11, 0x45858800);
-    state.color_button_selected_window_bg = x11_add_color(&state.x11, 0x8ec07c00);
-    state.color_button_window_bg = x11_add_color(&state.x11, 0x689d6a00);
 
-    state.color_button_tag_fg = x11_add_color(&state.x11, 0x0000000000);
-    state.color_button_tag_fg = x11_add_color(&state.x11, 0x0000000000);
-    state.color_button_window_fg = x11_add_color(&state.x11, 0x0000000000);
+    state.color_button_tag_bg = x11_add_color(&state.x11, color_schemes[ColorSchemeTags][0].bg);
+    state.color_button_tag_fg = x11_add_color(&state.x11, color_schemes[ColorSchemeTags][0].fg);
+    state.color_button_selected_tag_bg = x11_add_color(&state.x11, color_schemes[ColorSchemeTags][1].bg);
+
+    state.color_button_window_bg = x11_add_color(&state.x11, color_schemes[ColorSchemeWindows][0].bg);
+    state.color_button_window_fg = x11_add_color(&state.x11, color_schemes[ColorSchemeWindows][0].fg);
+    state.color_button_selected_window_bg = x11_add_color(&state.x11, color_schemes[ColorSchemeWindows][1].bg);
 
     bool isActive = XineramaIsActive(state.x11.display);
     i32 num_screens = 0;
