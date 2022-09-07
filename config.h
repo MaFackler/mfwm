@@ -14,6 +14,9 @@ struct KeyDef {
     Arg arg;
 };
 
+void run_sync(Arg arg) {
+    system(arg.String);
+}
 
 void run(Arg arg) {
     if (fork() == 0) {
@@ -100,4 +103,8 @@ static KeyDef keybindings[] = {
     { MODKEY, XK_p, run , "dmenu_run"},
     { MODKEY, XK_w, run, "chromium" },
     { MODKEY, XK_Return, run, "xterm" },
+};
+
+static const char *startup_commands[] = {
+    "feh --bg-scale ~/Pictures/Wallpaper.jpg",
 };

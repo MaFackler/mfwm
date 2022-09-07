@@ -368,6 +368,11 @@ int main() {
         x11_window_grab_key(&state.x11, state.x11.root, def.keysym, def.state);
     }
 
+    for (i32 i = 0; i < MF_ArrayLength(startup_commands); ++i) {
+        const char *cmd = startup_commands[i];
+        run_sync(Arg{cmd});
+    }
+
     while (state.running) {
         if (XPending(state.x11.display) > 0) {
             XEvent e;
