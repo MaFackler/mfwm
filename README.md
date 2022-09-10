@@ -20,4 +20,12 @@ The script used cgdb as a debugger.
 sudo ./debug.sh
 ```
 
+## Test Driven Development
+
+Requires `ag` and `entr`.
+
+```
+make tdd
+```
+
 

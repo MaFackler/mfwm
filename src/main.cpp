@@ -6,6 +6,8 @@
 //#include <X11/Xft/Xft.h>
 #include <X11/extensions/Xinerama.h>
 
+#include "mfwm_wm.h"
+
 #include <mf.h>
 #define MF_VECTOR_IMPLEMENTATION
 #include <mf_vector.h>
@@ -16,50 +18,16 @@
 #include "mfwm_x11.h"
 #include "mfwm_x11.cpp"
 
-struct Rect {
-    i32 x;
-    i32 y;
-    i32 w;
-    i32 h;
-};
+#include "mfwm_wm.cpp"
+
+
 
 struct Statusbar {
     i32 width;
     i32 height;
 };
 
-struct Tag {
-    const char *name;
-    i32 selected_window = 0;
-    vec(u32) windows = NULL;
-    vec(mf_str) window_names = NULL;
-};
 
-bool tag_has_window(Tag *tag, u32 window) {
-    mf_vec_for(tag->windows) {
-        if (*it == window)
-            return true;
-    }
-    return false;
-}
-
-bool tag_has_windows(Tag *tag) {
-    return mf_vec_size(tag->windows) > 0;
-}
-
-u32 tag_get_selected_window(Tag *tag) {
-    return tag->windows[tag->selected_window];
-}
-
-void tag_select_window(Tag *tag, Window window) {
-    for (i32 i = 0; i < mf_vec_size(tag->windows); ++i) {
-        if (tag->windows[i] == window) {
-            tag->selected_window = i;
-            return;
-        }
-    }
-    assert(!"INVALID");
-}
 
 void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows);
 
@@ -82,40 +50,31 @@ struct State {
     // Datastructures
     Statusbar statusbar;
 
-    i32 selected_tag = 0;
-
-    vec(Tag) tags = NULL;
-    vec(Rect) screens = NULL;
-
+    WindowManager wm;
 };
 
-inline Tag* state_get_current_tag(State *state) {
-    return &state->tags[state->selected_tag];    
-}
 
 void state_push_window(State *state, u32 window) {
-    Tag *tag = &state->tags[state->selected_tag];
-    u32 index = mf_vec_push(tag->windows, window);
+    Tag *tag = window_manager_get_current_tag(&state->wm);
     mf_str s = mf_str_new(256);
     x11_get_window_name(&state->x11, window, s.data, s.capacity);
     s.size = strlen(s.data);
-    mf_vec_push(tag->window_names, s);
-    tag->selected_window = index;
+    tag_add_window(tag, window, s);
 }
 
 void state_delete_window(State *state, u32 window) {
 }
 
 void state_select_tag(State *state, u32 tag_index) {
-    assert(tag_index < mf_vec_size(state->tags));
-    Tag *tag = state_get_current_tag(state);
+    assert(tag_index < mf_vec_size(state->wm.tags));
+    Tag *tag = window_manager_get_current_tag(&state->wm);
     mf_vec_for(tag->windows) {
         x11_window_hide(&state->x11, *it);
     }
-    state->selected_tag = tag_index;
+    state->wm.selected_tag = tag_index;
 
-    tag = state_get_current_tag(state);
-    screen_layout_windows(&state->x11, &state->screens[0], tag->windows);
+    tag = window_manager_get_current_tag(&state->wm);
+    screen_layout_windows(&state->x11, &state->wm.screens[0], tag->windows);
 
     if (tag_has_windows(tag)) {
         x11_window_focus(&state->x11, tag_get_selected_window(tag));
@@ -193,7 +152,7 @@ void enter_notify(XEvent &e) {
 
     // TODO: window manager should also take care of root
     if (event.window != state.x11.root) {
-        Tag *tag = state_get_current_tag(&state);
+        Tag *tag = window_manager_get_current_tag(&state.wm);
         if (tag_has_windows(tag)) {
             u32 old_window = tag_get_selected_window(tag);
             x11_window_set_border(&state.x11, old_window, 1, state.color_button_window_bg);
@@ -210,7 +169,7 @@ void map_request(XEvent &e) {
     XMapRequestEvent event = e.xmaprequest;
     log_event(__func__, event.window);
 
-    Tag *tag = state_get_current_tag(&state);
+    Tag *tag = window_manager_get_current_tag(&state.wm);
 
     // Unfocus old window and push new window
     if (mf_vec_index(tag->windows, (u32) event.window) == -1) {
@@ -224,7 +183,7 @@ void map_request(XEvent &e) {
 
     // Releayet windows and register it to x11
     if (mf_vec_index(tag->windows, (u32) event.window) >= 0) {
-        screen_layout_windows(&state.x11, &state.screens[0], tag->windows);
+        screen_layout_windows(&state.x11, &state.wm.screens[0], tag->windows);
     }
     XSelectInput(state.x11.display,
                  event.window,
@@ -244,13 +203,13 @@ void unmap_request(XEvent &e) {
     log_event(__func__, 0);
 
     LOGF("umap_request window %d", event.window);
-    Tag *tag = state_get_current_tag(&state);
+    Tag *tag = window_manager_get_current_tag(&state.wm);
     i32 index = mf_vec_index(tag->windows, (u32) event.window);
     if (index >= 0) {
         mf_vec_delete(tag->windows, index);
         mf_str *s = mf_vec_delete(tag->window_names, index);
         mf_str_free(*s);
-        screen_layout_windows(&state.x11, &state.screens[0], tag->windows);
+        screen_layout_windows(&state.x11, &state.wm.screens[0], tag->windows);
         tag->selected_window = MF_Min(index, mf_vec_size(tag->windows) - 1);
         if (tag_has_windows(tag)) {
             x11_window_focus(&state.x11, tag_get_selected_window(tag));
@@ -328,7 +287,7 @@ void render() {
         i32 w_total = w + x_margin * 2;
 
         XColor c = state.color_button_tag_bg;
-        if (i == state.selected_tag) {
+        if (i == state.wm.selected_tag) {
             c = state.color_button_selected_tag_bg;
         }
 
@@ -344,7 +303,7 @@ void render() {
     }
     x += 100;
 
-    Tag *tag = state_get_current_tag(&state);
+    Tag *tag = window_manager_get_current_tag(&state.wm);
     for (i32 i = 0; i < mf_vec_size(tag->window_names); ++i) {
         mf_str &text = tag->window_names[i];
         i32 w = x11_get_text_width(&state.x11, text.data, text.size);
@@ -393,7 +352,7 @@ int main() {
 
     LOG("Get screens");
     for (i32 i = 0; i < num_screens; ++i) {
-        mf_vec_push(state.screens, ((Rect) {
+        mf_vec_push(state.wm.screens, ((Rect) {
             info[i].x_org,
             info[i].y_org,
             info[i].width,
@@ -404,12 +363,12 @@ int main() {
 
     // Setup datastructures
     for (i32 i = 0; i < MF_ArrayLength(tags); ++i) {
-        Tag *tag = mf_vec_add(state.tags);
+        Tag *tag = mf_vec_add(state.wm.tags);
         tag->name = tags[i];
         tag->window_names = NULL;
         tag->windows = NULL;
     }
-    state.statusbar = {state.screens[0].w, STATUSBAR_HEIGHT};
+    state.statusbar = {state.wm.screens[0].w, STATUSBAR_HEIGHT};
     state.x11_statusbar = x11_window_create(&state.x11, state.statusbar.width, state.statusbar.height);
 
     for (KeyDef &def: keybindings) {

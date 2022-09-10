@@ -31,7 +31,7 @@ void quit(Arg arg) {
 }
 
 void select_next_window(Arg arg) {
-    Tag *tag = state_get_current_tag(&state);
+    Tag *tag = window_manager_get_current_tag(&state.wm);
     u32 amount_windows = mf_vec_size(tag->windows);
     if (amount_windows > 0) {
         tag->selected_window = MF_Min(tag->selected_window + 1, amount_windows - 1);
@@ -40,7 +40,7 @@ void select_next_window(Arg arg) {
 }
 
 void select_previous_window(Arg arg) {
-    Tag *tag = state_get_current_tag(&state);
+    Tag *tag = window_manager_get_current_tag(&state.wm);
     u32 amount_windows = mf_vec_size(tag->windows);
     if (amount_windows > 0) {
         tag->selected_window = MF_Max(tag->selected_window - 1, 0);
@@ -63,12 +63,12 @@ const char* tags[] = {
 
 void select_next_tag(Arg arg) {
     assert(MF_ArrayLength(tags) > 0);
-    state.selected_tag = mf_clamp(state.selected_tag + 1, 0, (i32) MF_ArrayLength(tags) - 1); 
+    state.wm.selected_tag = mf_clamp(state.wm.selected_tag + 1, 0, (i32) MF_ArrayLength(tags) - 1); 
 }
 
 void select_previous_tag(Arg arg) {
     assert(MF_ArrayLength(tags) > 0);
-    state.selected_tag = mf_clamp(state.selected_tag - 1, 0, (i32) MF_ArrayLength(tags) - 1); 
+    state.wm.selected_tag = mf_clamp(state.wm.selected_tag - 1, 0, (i32) MF_ArrayLength(tags) - 1); 
 }
 
 void select_tag_nr(Arg arg) {
