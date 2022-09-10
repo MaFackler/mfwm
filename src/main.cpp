@@ -35,12 +35,30 @@ struct Tag {
     vec(mf_str) window_names = NULL;
 };
 
+bool tag_has_window(Tag *tag, u32 window) {
+    mf_vec_for(tag->windows) {
+        if (*it == window)
+            return true;
+    }
+    return false;
+}
+
 bool tag_has_windows(Tag *tag) {
     return mf_vec_size(tag->windows) > 0;
 }
 
 u32 tag_get_selected_window(Tag *tag) {
     return tag->windows[tag->selected_window];
+}
+
+void tag_select_window(Tag *tag, Window window) {
+    for (i32 i = 0; i < mf_vec_size(tag->windows); ++i) {
+        if (tag->windows[i] == window) {
+            tag->selected_window = i;
+            return;
+        }
+    }
+    assert(!"INVALID");
 }
 
 void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows);
@@ -51,14 +69,15 @@ struct State {
     X11Base x11;
     X11Window x11_statusbar;
 
-    X11Color color_bar_bg;
-    X11Color color_button_tag_bg;
-    X11Color color_button_selected_tag_bg;
-    X11Color color_button_tag_fg;
+    XColor color_debug;
+    XColor color_bar_bg;
+    XColor color_button_tag_bg;
+    XColor color_button_selected_tag_bg;
+    XColor color_button_tag_fg;
 
-    X11Color color_button_window_bg;
-    X11Color color_button_selected_window_bg;
-    X11Color color_button_window_fg;
+    XColor color_button_window_bg;
+    XColor color_button_selected_window_bg;
+    XColor color_button_window_fg;
 
     // Datastructures
     Statusbar statusbar;
@@ -66,7 +85,6 @@ struct State {
     i32 selected_tag = 0;
 
     vec(Tag) tags = NULL;
-
     vec(Rect) screens = NULL;
 
 };
@@ -82,7 +100,6 @@ void state_push_window(State *state, u32 window) {
     x11_get_window_name(&state->x11, window, s.data, s.capacity);
     s.size = strlen(s.data);
     mf_vec_push(tag->window_names, s);
-
     tag->selected_window = index;
 }
 
@@ -168,8 +185,25 @@ void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
 void map_notify(XEvent &e) {
     XMapEvent event = e.xmap;
     log_event(__func__, event.window);
-    x11_window_focus(&state.x11, event.window);
     render();
+}
+
+void enter_notify(XEvent &e) {
+    XCrossingEvent event = e.xcrossing;
+
+    // TODO: window manager should also take care of root
+    if (event.window != state.x11.root) {
+        Tag *tag = state_get_current_tag(&state);
+        if (tag_has_windows(tag)) {
+            u32 old_window = tag_get_selected_window(tag);
+            x11_window_set_border(&state.x11, old_window, 1, state.color_button_window_bg);
+        }
+
+        tag_select_window(tag, event.window);
+        x11_window_set_border(&state.x11, event.window, 3, state.color_button_selected_window_bg);
+    }
+
+    x11_window_focus(&state.x11, event.window);
 }
 
 void map_request(XEvent &e) {
@@ -177,14 +211,30 @@ void map_request(XEvent &e) {
     log_event(__func__, event.window);
 
     Tag *tag = state_get_current_tag(&state);
+
+    // Unfocus old window and push new window
+    if (mf_vec_index(tag->windows, (u32) event.window) == -1) {
+        if (tag_has_windows(tag)) {
+            u32 old_window = tag_get_selected_window(tag);
+            x11_window_set_border(&state.x11, old_window, 1, state.color_button_window_bg);
+        }
+
+        state_push_window(&state, event.window);
+    }
+
+    // Releayet windows and register it to x11
     if (mf_vec_index(tag->windows, (u32) event.window) >= 0) {
         screen_layout_windows(&state.x11, &state.screens[0], tag->windows);
     }
-
     XSelectInput(state.x11.display,
                  event.window,
                  EnterWindowMask | FocusChangeMask | PointerMotionMask);
     XMapWindow(state.x11.display, event.window);
+
+    // Focus new window
+    x11_window_focus(&state.x11, event.window);
+    x11_window_set_border(&state.x11, event.window, 3, state.color_button_selected_window_bg);
+
     XSync(state.x11.display, 0);
 }
 
@@ -236,11 +286,6 @@ void configure_request(XEvent &e) {
                      event.value_mask,
                      &wc);
     XSync(state.x11.display, 0);
-
-    Tag *tag = state_get_current_tag(&state);
-    if (mf_vec_index(tag->windows, (u32) event.window) == -1) {
-        state_push_window(&state, event.window);
-    }
 }
 
 void expose(XEvent &e) {
@@ -282,7 +327,7 @@ void render() {
         i32 w = x11_get_text_width(&state.x11, text.data, text.size);
         i32 w_total = w + x_margin * 2;
 
-        X11Color c = state.color_button_tag_bg;
+        XColor c = state.color_button_tag_bg;
         if (i == state.selected_tag) {
             c = state.color_button_selected_tag_bg;
         }
@@ -304,7 +349,7 @@ void render() {
         mf_str &text = tag->window_names[i];
         i32 w = x11_get_text_width(&state.x11, text.data, text.size);
         i32 w_total = w + x_margin * 2;
-        X11Color c = state.color_button_window_bg;
+        XColor c = state.color_button_window_bg;
         if (i == tag->selected_window) {
             c = state.color_button_selected_window_bg;
         }
@@ -324,11 +369,13 @@ void render() {
 int main() {
     log_file = fopen("./mfwm.log", "w");
     MF_Assert(log_file);
+    LOG("start");
 
     // X11
     x11_init(&state.x11);
 
     // TODO: What to do with alpha
+    state.color_debug = x11_add_color(&state.x11, 0xFF000000);
     state.color_bar_bg = x11_add_color(&state.x11, 0x28282800);
 
     state.color_button_tag_bg = x11_add_color(&state.x11, color_schemes[ColorSchemeTags][0].bg);
@@ -344,6 +391,7 @@ int main() {
     XineramaScreenInfo *info = XineramaQueryScreens(state.x11.display, &num_screens);
 
 
+    LOG("Get screens");
     for (i32 i = 0; i < num_screens; ++i) {
         mf_vec_push(state.screens, ((Rect) {
             info[i].x_org,
@@ -352,7 +400,7 @@ int main() {
             info[i].height,
         }));
     }
-    MF_Assert(mf_vec_size(state.screens) == 1);
+    //MF_Assert(mf_vec_size(state.screens) == 1);
 
     // Setup datastructures
     for (i32 i = 0; i < MF_ArrayLength(tags); ++i) {
@@ -368,10 +416,12 @@ int main() {
         x11_window_grab_key(&state.x11, state.x11.root, def.keysym, def.state);
     }
 
+    LOG("before autostart\n");
     for (i32 i = 0; i < MF_ArrayLength(startup_commands); ++i) {
         const char *cmd = startup_commands[i];
         run_sync(Arg{cmd});
     }
+    LOG("after autostart\n");
 
     while (state.running) {
         if (XPending(state.x11.display) > 0) {
@@ -396,7 +446,7 @@ int main() {
                 // --------
 
                 case MotionNotify: break;
-                case EnterNotify: break;
+                case EnterNotify: enter_notify(e); break;
                 case DestroyNotify: break;
                 case PropertyNotify: break;
 

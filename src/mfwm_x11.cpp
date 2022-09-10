@@ -82,35 +82,42 @@ void x11_window_hide(X11Base *x11, Window window) {
     x11_window_move(x11, window, -4000, 0);
 }
 
-X11Color x11_add_color(X11Base *x11, u8 r, u8 g, u8 b) {
-    X11Color res = mf_vec_size(x11->colors);
+void x11_window_set_border(X11Base *x11, Window window, i32 width, XColor color) {
+    XSetWindowBorder(x11->display, window, color.pixel);
+    XWindowChanges c = {};
+    c.border_width = width;
+    XConfigureWindow(x11->display, window, CWBorderWidth, &c);
+}
+
+
+XColor x11_add_color(X11Base *x11, u8 r, u8 g, u8 b) {
+    size_t res = mf_vec_size(x11->colors);
     XColor *color = mf_vec_add(x11->colors);
     color->red = r * 255;
     color->green = g * 255;
     color->blue = b * 255;
     color->flags = DoRed | DoGreen | DoBlue;
     XAllocColor(x11->display, x11->colormap, color);
-    return res;
+    return *color;
 }
 
-X11Color x11_add_color(X11Base *x11, u32 color) {
+XColor x11_add_color(X11Base *x11, u32 color) {
     u8 r = (color >> 24) & 0xFF;
     u8 g = (color >> 16) & 0xFF;
     u8 b = (color >> 8) & 0xFF;
-    printf("%d %d %d\n", r, g, b);
-    X11Color res = x11_add_color(x11, r, g, b);
+    XColor res = x11_add_color(x11, r, g, b);
     return res;
 }
 
-void x11_fill_rect(X11Base *x11, X11Window &window, i32 x, i32 y, u32 w, u32 h, X11Color color) {
-    XSetForeground(x11->display, x11->gc, x11->colors[color].pixel);
-    XSetBackground(x11->display, x11->gc, x11->colors[color].pixel);
+void x11_fill_rect(X11Base *x11, X11Window &window, i32 x, i32 y, u32 w, u32 h, XColor color) {
+    XSetForeground(x11->display, x11->gc, color.pixel);
+    XSetBackground(x11->display, x11->gc, color.pixel);
     XFillRectangle(x11->display, window.draw, x11->gc, x, y, w, h);
     XCopyArea(x11->display, window.draw, window.window, x11->gc, 0, 0, window.width, window.height, 0, 0);
 }
 
-void x11_draw_text(X11Base *x11, X11Window &window, i32 x, i32 y, const char *text, u64 n, X11Color color) {
-    XSetForeground(x11->display, x11->gc, x11->colors[color].pixel);
+void x11_draw_text(X11Base *x11, X11Window &window, i32 x, i32 y, const char *text, u64 n, XColor color) {
+    XSetForeground(x11->display, x11->gc, color.pixel);
     XDrawString(x11->display, window.draw, x11->gc, x, y, text, n);
     XCopyArea(x11->display, window.draw, window.window, x11->gc, 0, 0, window.width, window.height, 0, 0);
 }
