@@ -23,6 +23,8 @@
 
 
 struct Statusbar {
+    i32 x;
+    i32 y;
     i32 width;
     i32 height;
 };
@@ -35,7 +37,9 @@ struct State {
     bool running = true;
     // X11 Interface stuff
     X11Base x11;
-    X11Window x11_statusbar;
+
+
+    vec(X11Window) x11_statusbars;
 
     XColor color_debug;
     XColor color_bar_bg;
@@ -48,7 +52,7 @@ struct State {
     XColor color_button_window_fg;
 
     // Datastructures
-    Statusbar statusbar;
+    vec(Statusbar) statusbars;
 
     WindowManager wm;
 };
@@ -57,8 +61,9 @@ struct State {
 void state_push_window(State *state, u32 window) {
     Tag *tag = window_manager_get_current_tag(&state->wm);
     mf_str s = mf_str_new(256);
-    x11_get_window_name(&state->x11, window, s.data, s.capacity);
-    s.size = strlen(s.data);
+    x11_get_window_name(&state->x11, window, s, mf_str_capacity(s));
+    // TODO: this is bad
+    mf__str_get_header(s)->size = strlen(s);
     tag_add_window(tag, window, s);
 }
 
@@ -66,7 +71,7 @@ void state_delete_window(State *state, u32 window) {
 }
 
 void state_select_tag(State *state, u32 tag_index) {
-    assert(tag_index < mf_vec_size(state->wm.tags));
+    MF_Assert(tag_index < mf_vec_size(state->wm.tags));
     Tag *tag = window_manager_get_current_tag(&state->wm);
     mf_vec_for(tag->windows) {
         x11_window_hide(&state->x11, *it);
@@ -108,10 +113,12 @@ void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
     i32 amount_windows = mf_vec_size(windows);
     for (i32 i = 0; i < amount_windows; ++i) {
         u32 window = windows[i]; 
-        mf_str buf = mf_str_stack(256);
-        x11_get_window_name(x11, window, buf.data, buf.capacity);
-        buf.size = strlen(buf.data);
-        LOGF("Window name is nr=%d id=%d-%s", i, window, buf.data);
+        // TODO: stack string/buffer
+        mf_str buf = mf_str_new(256);
+        x11_get_window_name(x11, window, buf, mf_str_capacity(buf));
+        mf__str_get_header(buf)->size = strlen(buf);
+        LOGF("Window name is nr=%d id=%d-%s", i, window, buf);
+        mf_str_free(buf);
 
         // Calculate
         i32 window_x = screen->x + GAP;
@@ -271,56 +278,62 @@ void key_press(XEvent &e) {
 }
 
 void render() {
-    x11_fill_rect(&state.x11, state.x11_statusbar,
-                  0, 0,
-                  state.x11_statusbar.width, state.x11_statusbar.height,
-                  state.color_bar_bg);
+
+    for (i32 i = 0; i < mf_vec_size(state.wm.screens); ++i) {
+
+        Rect *screen = &state.wm.screens[i];
+        X11Window statusbar = state.x11_statusbars[i];
+        x11_fill_rect(&state.x11, statusbar,
+                      0, 0,
+                      statusbar.width, statusbar.height,
+                      state.color_bar_bg);
 
 
-    i32 x_margin = 5;
-    i32 spacing = 1;
-    i32 x = spacing;
-    i32 h = state.x11_statusbar.height - 2 * spacing;
-    for (i32 i = 0; i < MF_ArrayLength(tags); ++i) {
-        mf_strview text = S(tags[i]);
-        i32 w = x11_get_text_width(&state.x11, text.data, text.size);
-        i32 w_total = w + x_margin * 2;
+        i32 x_margin = 5;
+        i32 spacing = 1;
+        i32 x = spacing;
+        i32 h = statusbar.height - 2 * spacing;
+        for (i32 i = 0; i < MF_ArrayLength(tags); ++i) {
+            mf_strview text = S(tags[i]);
+            i32 w = x11_get_text_width(&state.x11, text.data, text.size);
+            i32 w_total = w + x_margin * 2;
 
-        XColor c = state.color_button_tag_bg;
-        if (i == state.wm.selected_tag) {
-            c = state.color_button_selected_tag_bg;
+            XColor c = state.color_button_tag_bg;
+            if (i == state.wm.selected_tag) {
+                c = state.color_button_selected_tag_bg;
+            }
+
+            x11_fill_rect(&state.x11, statusbar,
+                          x, spacing, w_total, h, c);
+
+            // TODO: Center Text
+            x11_draw_text(&state.x11, statusbar, x + x_margin,
+                          state.x11.font_height,
+                          text.data, text.size, state.color_button_tag_fg);
+
+            x += w_total + spacing;
         }
+        x += 100;
 
-        x11_fill_rect(&state.x11, state.x11_statusbar,
-                      x, spacing, w_total, h, c);
+        Tag *tag = window_manager_get_current_tag(&state.wm);
+        for (i32 i = 0; i < mf_vec_size(tag->window_names); ++i) {
+            mf_str text = tag->window_names[i];
+            i32 w = x11_get_text_width(&state.x11, text, mf_str_size(text));
+            i32 w_total = w + x_margin * 2;
+            XColor c = state.color_button_window_bg;
+            if (i == tag->selected_window) {
+                c = state.color_button_selected_window_bg;
+            }
 
-        // TODO: Center Text
-        x11_draw_text(&state.x11, state.x11_statusbar, x + x_margin,
-                      state.x11.font_height,
-                      text.data, text.size, state.color_button_tag_fg);
+            x11_fill_rect(&state.x11, statusbar,
+                          x, 0, w, w, c);
 
-        x += w_total + spacing;
-    }
-    x += 100;
-
-    Tag *tag = window_manager_get_current_tag(&state.wm);
-    for (i32 i = 0; i < mf_vec_size(tag->window_names); ++i) {
-        mf_str &text = tag->window_names[i];
-        i32 w = x11_get_text_width(&state.x11, text.data, text.size);
-        i32 w_total = w + x_margin * 2;
-        XColor c = state.color_button_window_bg;
-        if (i == tag->selected_window) {
-            c = state.color_button_selected_window_bg;
+            // TODO: Center Text
+            x11_draw_text(&state.x11, statusbar,
+                          x + x_margin, state.x11.font_height,
+                          text, mf_str_size(text), state.color_button_window_fg);
+            x += w + spacing;
         }
-
-        x11_fill_rect(&state.x11, state.x11_statusbar,
-                      x, 0, w, w, c);
-
-        // TODO: Center Text
-        x11_draw_text(&state.x11, state.x11_statusbar,
-                      x + x_margin, state.x11.font_height,
-                      text.data, text.size, state.color_button_window_fg);
-        x += w + spacing;
     }
     //XSync(state.x11.display, False);
 }
@@ -349,18 +362,6 @@ int main() {
     i32 num_screens = 0;
     XineramaScreenInfo *info = XineramaQueryScreens(state.x11.display, &num_screens);
 
-
-    LOG("Get screens");
-    for (i32 i = 0; i < num_screens; ++i) {
-        mf_vec_push(state.wm.screens, ((Rect) {
-            info[i].x_org,
-            info[i].y_org,
-            info[i].width,
-            info[i].height,
-        }));
-    }
-    //MF_Assert(mf_vec_size(state.screens) == 1);
-
     // Setup datastructures
     for (i32 i = 0; i < MF_ArrayLength(tags); ++i) {
         Tag *tag = mf_vec_add(state.wm.tags);
@@ -368,8 +369,27 @@ int main() {
         tag->window_names = NULL;
         tag->windows = NULL;
     }
-    state.statusbar = {state.wm.screens[0].w, STATUSBAR_HEIGHT};
-    state.x11_statusbar = x11_window_create(&state.x11, state.statusbar.width, state.statusbar.height);
+
+    for (i32 i = 0; i < num_screens; ++i) {
+
+        LOGF("Got scren number %d", info[i].screen_number);
+
+        Rect screen = {
+            info[i].x_org,
+            info[i].y_org,
+            info[i].width,
+            info[i].height,
+        };
+        mf_vec_push(state.wm.screens, screen);
+        Statusbar statusbar = {screen.x, screen.y, screen.w, STATUSBAR_HEIGHT};
+        mf_vec_push(state.statusbars, statusbar);
+        X11Window window = x11_window_create(&state.x11,
+                                             statusbar.x, statusbar.y,
+                                             statusbar.width, statusbar.height);
+        mf_vec_push(state.x11_statusbars, window);
+    }
+
+
 
     for (KeyDef &def: keybindings) {
         x11_window_grab_key(&state.x11, state.x11.root, def.keysym, def.state);
@@ -420,7 +440,10 @@ int main() {
     }
 
     fclose(log_file);
-    x11_window_destroy(&state.x11, state.x11_statusbar);
+
+    mf_vec_for(state.x11_statusbars) {
+        x11_window_destroy(&state.x11, *it);
+    }
     x11_shutdown(&state.x11);
 }
 

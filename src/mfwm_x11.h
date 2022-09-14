@@ -29,7 +29,7 @@ void x11_window_grab_key(X11Base *x11, Window window, KeySym sym, u32 mod);
 XColor x11_add_color(X11Base *x11, u8 r, u8 g, u8 b);
 XColor x11_add_color(X11Base *x11, u32 color);
 
-X11Window x11_window_create(X11Base *x11, u32 width, u32 height);
+X11Window x11_window_create(X11Base *x11, u32 x, u32 y, u32 width, u32 height);
 void x11_window_destroy(X11Base *x11, X11Window &window);
 void x11_window_focus(X11Base *x11, Window window);
 void x11_window_move(X11Base *x11, Window window, i32 x, i32 y);

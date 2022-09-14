@@ -62,12 +62,12 @@ const char* tags[] = {
 };
 
 void select_next_tag(Arg arg) {
-    assert(MF_ArrayLength(tags) > 0);
+    MF_Assert(MF_ArrayLength(tags) > 0);
     state.wm.selected_tag = mf_clamp(state.wm.selected_tag + 1, 0, (i32) MF_ArrayLength(tags) - 1); 
 }
 
 void select_previous_tag(Arg arg) {
-    assert(MF_ArrayLength(tags) > 0);
+    MF_Assert(MF_ArrayLength(tags) > 0);
     state.wm.selected_tag = mf_clamp(state.wm.selected_tag - 1, 0, (i32) MF_ArrayLength(tags) - 1); 
 }
 

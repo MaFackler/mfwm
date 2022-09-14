@@ -28,7 +28,7 @@ void tag_select_window(Tag *tag, u32 window) {
             return;
         }
     }
-    assert(!"INVALID");
+    MF_Assert(!"INVALID");
 }
 
 Tag* window_manager_get_current_tag(WindowManager *wm) {

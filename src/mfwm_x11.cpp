@@ -26,11 +26,11 @@ void x11_init(X11Base *x11) {
 
     i32 n = 0;
     char **fonts = XListFonts(x11->display, "*", 256, &n);
-    assert(n > 0);
+    MF_Assert(n > 0);
     // TODO: move to xft for better fonts
     //x11->font = XftFontOpenName(x11->display, x11->screen, fontname);
     x11->font = XLoadQueryFont(x11->display, fonts[0]);
-    assert(x11->font);
+    MF_Assert(x11->font);
     x11->font_height = x11->font->ascent + x11->font->descent;
     XFreeFontNames(fonts);
 }
@@ -45,13 +45,13 @@ void x11_window_grab_key(X11Base *x11, Window window, KeySym sym, u32 mod) {
     XGrabKey(x11->display, code, mod, window, 1, GrabModeAsync, GrabModeAsync); 
 }
 
-X11Window x11_window_create(X11Base *x11, u32 width, u32 height) {
+X11Window x11_window_create(X11Base *x11, u32 x, u32 y, u32 width, u32 height) {
     XSetWindowAttributes attribs = {};
     attribs.background_pixel = ParentRelative;
     attribs.event_mask = ButtonPressMask | ExposureMask;
     Window window = XCreateWindow(x11->display,
                                   x11->root,
-                                  0, 0,
+                                  x, y,
                                   width,
                                   height,
                                   0,
