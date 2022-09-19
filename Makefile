@@ -1,6 +1,6 @@
 CFLAGS=-I./libs/mflibs/src -g -Wno-deprecated-declarations
 LIBS=-lX11 -lXinerama -lm
-SRCS=src/main.cpp src/mfwm_x11.h src/mfwm_x11.cpp config.h
+SRCS=src/main.cpp src/mfwm_x11.h src/mfwm_x11.cpp src/mfwm_wm.h src/mfwm_wm.cpp config.h
 
 # CONTANTS
 TEST_RESOLUTION=1600x900

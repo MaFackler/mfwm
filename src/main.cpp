@@ -31,8 +31,6 @@ struct Statusbar {
 
 
 
-void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows);
-
 struct State {
     bool running = true;
     // X11 Interface stuff
@@ -57,35 +55,17 @@ struct State {
     WindowManager wm;
 };
 
-
-void state_push_window(State *state, u32 window) {
-    Tag *tag = window_manager_get_current_tag(&state->wm);
+mf_str state_get_window_name(State *state, u32 window) {
     mf_str s = mf_str_new(256);
     x11_get_window_name(&state->x11, window, s, mf_str_capacity(s));
-    // TODO: this is bad
     mf__str_get_header(s)->size = strlen(s);
-    tag_add_window(tag, window, s);
+    return s;
 }
+
+
 
 void state_delete_window(State *state, u32 window) {
 }
-
-void state_select_tag(State *state, u32 tag_index) {
-    MF_Assert(tag_index < mf_vec_size(state->wm.tags));
-    Tag *tag = window_manager_get_current_tag(&state->wm);
-    mf_vec_for(tag->windows) {
-        x11_window_hide(&state->x11, *it);
-    }
-    state->wm.selected_tag = tag_index;
-
-    tag = window_manager_get_current_tag(&state->wm);
-    screen_layout_windows(&state->x11, &state->wm.screens[0], tag->windows);
-
-    if (tag_has_windows(tag)) {
-        x11_window_focus(&state->x11, tag_get_selected_window(tag));
-    }
-}
-
 
 #define LOG(msg) fprintf(log_file, msg "\n"); fflush(log_file);
 #define LOGF(msg, ...) fprintf(log_file, msg "\n", __VA_ARGS__); fflush(log_file);
@@ -94,38 +74,53 @@ void state_select_tag(State *state, u32 tag_index) {
 static State state = {};
 FILE *log_file = NULL;
 
+#include "mfwm_commands.cpp"
+
 #include "../config.h"
 
 #define LOG_FUNCTION(a, b, with_window)
 
 void render();
 
-void log_event(const char *func, Window window) {
-    char _buf[256] = {};
-    if (window) {
-        x11_get_window_name(&state.x11, window, &_buf[0], MF_ArrayLength(_buf));
-    }
-    LOGF("- EVENT - %s: %d-%s", func, window, &_buf[0])
+void window_register(u32 window) {
+    XSelectInput(state.x11.display,
+                 window,
+                 EnterWindowMask | FocusChangeMask | PointerMotionMask);
+    XMapWindow(state.x11.display, window);
 }
 
-void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
+void window_focus(u32 window) {
+    x11_window_focus(&state.x11, window);
+    x11_window_set_border(&state.x11, window, 3, state.color_button_window_bg);
+}
 
+void window_unfocus(u32 window) {
+    x11_window_set_border(&state.x11, window, 0, state.color_button_selected_window_bg);
+}
+
+void window_hide(u32 window) {
+    x11_window_hide(&state.x11, window);
+}
+
+void do_layout(Rect *rect, vec(u32) windows) {
+    X11Base *x11 = &state.x11;
     i32 amount_windows = mf_vec_size(windows);
     for (i32 i = 0; i < amount_windows; ++i) {
         u32 window = windows[i]; 
-        // TODO: stack string/buffer
-        mf_str buf = mf_str_new(256);
-        x11_get_window_name(x11, window, buf, mf_str_capacity(buf));
+        // TODO: why does mf_str not work bug???!
+        //mf_str buf = mf_str_new(256);
+        char buf[256] = {};
+        x11_get_window_name(x11, window, buf, 256);
         mf__str_get_header(buf)->size = strlen(buf);
         LOGF("Window name is nr=%d id=%d-%s", i, window, buf);
-        mf_str_free(buf);
+        //mf_str_free(buf);
 
         // Calculate
-        i32 window_x = screen->x + GAP;
-        i32 window_y = screen->y + STATUSBAR_HEIGHT + GAP;
+        i32 window_x = rect->x + GAP;
+        i32 window_y = rect->y + STATUSBAR_HEIGHT + GAP;
 
-        i32 window_height = screen->h - (STATUSBAR_HEIGHT + 2 * GAP);
-        i32 window_width = screen->w - 2 * GAP;
+        i32 window_height = rect->h - (STATUSBAR_HEIGHT + 2 * GAP);
+        i32 window_width = rect->w - 2 * GAP;
         if (amount_windows > 1) {
             window_width = (window_width - GAP) * 0.5;
             if (i > 0) {
@@ -148,59 +143,67 @@ void screen_layout_windows(X11Base *x11, Rect *screen, vec(u32) windows) {
     }
 }
 
+void log_event(const char *func, Window window) {
+    char _buf[256] = {};
+    if (window) {
+        x11_get_window_name(&state.x11, window, &_buf[0], MF_ArrayLength(_buf));
+    }
+    LOGF("- EVENT - %s: %d-%s", func, window, &_buf[0])
+}
+
+
 void map_notify(XEvent &e) {
     XMapEvent event = e.xmap;
     log_event(__func__, event.window);
     render();
 }
 
+void focus_in(XEvent &e) {
+    XFocusChangeEvent event = e.xfocus;
+    //MF_Assert(!"INVALID");
+}
+
+void motion_notify(XEvent &e) {
+    XMotionEvent event = e.xmotion;
+    i32 x = event.x_root;
+    i32 y = event.y_root;
+    log_event(__func__, event.window);
+
+    if (event.window != state.x11.root) {
+        return;
+    }
+    for (i32 i = 0; i < mf_vec_size(state.wm.monitors); ++i) {
+        Monitor *it = &state.wm.monitors[i];
+        if (x >= it->rect.x && x < it->rect.x + it->rect.w) {
+            if (i != state.wm.selected_monitor) {
+                window_manager_select_monitor(&state.wm, i);
+                render();
+            }
+            break;
+        }
+    }
+
+    LOG("motion notify end");
+}
+
 void enter_notify(XEvent &e) {
     XCrossingEvent event = e.xcrossing;
+    log_event(__func__, event.window);
 
     // TODO: window manager should also take care of root
     if (event.window != state.x11.root) {
-        Tag *tag = window_manager_get_current_tag(&state.wm);
-        if (tag_has_windows(tag)) {
-            u32 old_window = tag_get_selected_window(tag);
-            x11_window_set_border(&state.x11, old_window, 1, state.color_button_window_bg);
-        }
-
-        tag_select_window(tag, event.window);
-        x11_window_set_border(&state.x11, event.window, 3, state.color_button_selected_window_bg);
+        window_manager_window_focus(&state.wm, event.window);
     }
 
     x11_window_focus(&state.x11, event.window);
+    LOG("enter notify end");
 }
 
 void map_request(XEvent &e) {
     XMapRequestEvent event = e.xmaprequest;
     log_event(__func__, event.window);
-
-    Tag *tag = window_manager_get_current_tag(&state.wm);
-
-    // Unfocus old window and push new window
-    if (mf_vec_index(tag->windows, (u32) event.window) == -1) {
-        if (tag_has_windows(tag)) {
-            u32 old_window = tag_get_selected_window(tag);
-            x11_window_set_border(&state.x11, old_window, 1, state.color_button_window_bg);
-        }
-
-        state_push_window(&state, event.window);
-    }
-
-    // Releayet windows and register it to x11
-    if (mf_vec_index(tag->windows, (u32) event.window) >= 0) {
-        screen_layout_windows(&state.x11, &state.wm.screens[0], tag->windows);
-    }
-    XSelectInput(state.x11.display,
-                 event.window,
-                 EnterWindowMask | FocusChangeMask | PointerMotionMask);
-    XMapWindow(state.x11.display, event.window);
-
-    // Focus new window
-    x11_window_focus(&state.x11, event.window);
-    x11_window_set_border(&state.x11, event.window, 3, state.color_button_selected_window_bg);
-
+    mf_str window_name = state_get_window_name(&state, event.window);
+    window_manager_window_add(&state.wm, event.window, window_name);
     XSync(state.x11.display, 0);
 }
 
@@ -208,21 +211,8 @@ void unmap_request(XEvent &e) {
     XUnmapEvent event = e.xunmap;
     // NOTE: unmap request not able to print window name
     log_event(__func__, 0);
-
     LOGF("umap_request window %d", event.window);
-    Tag *tag = window_manager_get_current_tag(&state.wm);
-    i32 index = mf_vec_index(tag->windows, (u32) event.window);
-    if (index >= 0) {
-        mf_vec_delete(tag->windows, index);
-        mf_str *s = mf_vec_delete(tag->window_names, index);
-        mf_str_free(*s);
-        screen_layout_windows(&state.x11, &state.wm.screens[0], tag->windows);
-        tag->selected_window = MF_Min(index, mf_vec_size(tag->windows) - 1);
-        if (tag_has_windows(tag)) {
-            x11_window_focus(&state.x11, tag_get_selected_window(tag));
-        }
-    }
-
+    window_manager_window_delete(&state.wm, event.window);
     render();
 }
 
@@ -277,29 +267,37 @@ void key_press(XEvent &e) {
     }
 }
 
+
+
 void render() {
 
-    for (i32 i = 0; i < mf_vec_size(state.wm.screens); ++i) {
+    LOG("do render");
+    for (i32 i = 0; i < mf_vec_size(state.wm.monitors); ++i) {
 
-        Rect *screen = &state.wm.screens[i];
+        Monitor *mon = &state.wm.monitors[i];
         X11Window statusbar = state.x11_statusbars[i];
+        auto color = state.color_bar_bg;
+        if (i == state.wm.selected_monitor) {
+            color = state.color_debug;
+        }
         x11_fill_rect(&state.x11, statusbar,
                       0, 0,
                       statusbar.width, statusbar.height,
-                      state.color_bar_bg);
+                      color);
+        LOG("statusbar drawn");
 
 
         i32 x_margin = 5;
         i32 spacing = 1;
         i32 x = spacing;
         i32 h = statusbar.height - 2 * spacing;
-        for (i32 i = 0; i < MF_ArrayLength(tags); ++i) {
-            mf_strview text = S(tags[i]);
+        for (i32 i = 0; i < mf_vec_size(mon->tags); ++i) {
+            mf_strview text = S(mon->tags[i].name);
             i32 w = x11_get_text_width(&state.x11, text.data, text.size);
             i32 w_total = w + x_margin * 2;
 
             XColor c = state.color_button_tag_bg;
-            if (i == state.wm.selected_tag) {
+            if (i == mon->selected_tag) {
                 c = state.color_button_selected_tag_bg;
             }
 
@@ -314,11 +312,13 @@ void render() {
             x += w_total + spacing;
         }
         x += 100;
+        LOG("tags drawn");
 
-        Tag *tag = window_manager_get_current_tag(&state.wm);
+        Tag *tag = window_manager_monitor_get_selected_tag(&state.wm, mon);
         for (i32 i = 0; i < mf_vec_size(tag->window_names); ++i) {
-            mf_str text = tag->window_names[i];
-            i32 w = x11_get_text_width(&state.x11, text, mf_str_size(text));
+            const char *text = tag->window_names[i];
+            LOG("going to get text width");
+            i32 w = x11_get_text_width(&state.x11, text, strlen(text));
             i32 w_total = w + x_margin * 2;
             XColor c = state.color_button_window_bg;
             if (i == tag->selected_window) {
@@ -331,10 +331,12 @@ void render() {
             // TODO: Center Text
             x11_draw_text(&state.x11, statusbar,
                           x + x_margin, state.x11.font_height,
-                          text, mf_str_size(text), state.color_button_window_fg);
+                          text, strlen(text), state.color_button_window_fg);
             x += w + spacing;
         }
+        LOG("window buttons drawn");
     }
+    LOG("dorender end");
     //XSync(state.x11.display, False);
 }
 
@@ -363,30 +365,30 @@ int main() {
     XineramaScreenInfo *info = XineramaQueryScreens(state.x11.display, &num_screens);
 
     // Setup datastructures
-    for (i32 i = 0; i < MF_ArrayLength(tags); ++i) {
-        Tag *tag = mf_vec_add(state.wm.tags);
-        tag->name = tags[i];
-        tag->window_names = NULL;
-        tag->windows = NULL;
-    }
-
     for (i32 i = 0; i < num_screens; ++i) {
 
-        LOGF("Got scren number %d", info[i].screen_number);
 
-        Rect screen = {
+        Rect rect = {
             info[i].x_org,
             info[i].y_org,
             info[i].width,
             info[i].height,
         };
-        mf_vec_push(state.wm.screens, screen);
-        Statusbar statusbar = {screen.x, screen.y, screen.w, STATUSBAR_HEIGHT};
+        LOGF("Got scren number %d (%d+%d %dx%d)", info[i].screen_number, rect.x, rect.y, rect.w, rect.h);
+        window_manager_add_monitor(&state.wm, rect);
+        Statusbar statusbar = {rect.x, rect.y, rect.w, STATUSBAR_HEIGHT};
         mf_vec_push(state.statusbars, statusbar);
         X11Window window = x11_window_create(&state.x11,
                                              statusbar.x, statusbar.y,
                                              statusbar.width, statusbar.height);
         mf_vec_push(state.x11_statusbars, window);
+    }
+
+
+    mf_vec_for(state.wm.monitors) {
+        for (i32 i = 0; i < MF_ArrayLength(tags); ++i) {
+            window_manager_monitor_add_tag(&state.wm, it, tags[i]);
+        }
     }
 
 
@@ -402,11 +404,20 @@ int main() {
     }
     LOG("after autostart\n");
 
+    state.wm.api.window_register = window_register;
+    state.wm.api.window_focus = window_focus;
+    state.wm.api.window_unfocus = window_unfocus;
+    state.wm.api.window_hide = window_hide;
+    state.wm.api.do_layout = do_layout;
+
     while (state.running) {
         if (XPending(state.x11.display) > 0) {
             XEvent e;
             XNextEvent(state.x11.display, &e);
 
+            if (e.type != 6) {
+                //LOGF("GOT EVENT %d", e.type);
+            }
             switch (e.type) {
                 case ButtonPress: button_press(e); break;
                 case KeyPress: key_press(e); break;
@@ -423,13 +434,14 @@ int main() {
                 case MapNotify: map_notify(e); break;
                 case Expose: render(); break;
                 // --------
+                //
+                case FocusIn: focus_in(e); break;
+                case MotionNotify: motion_notify(e); break;
 
-                case MotionNotify: break;
                 case EnterNotify: enter_notify(e); break;
                 case DestroyNotify: break;
                 case PropertyNotify: break;
 
-                case FocusIn: break;
                 case FocusOut: break;
                 case ClientMessage: break;
                 case MappingNotify: break;
