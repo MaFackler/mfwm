@@ -18,6 +18,12 @@
 #include "mfwm_x11.h"
 #include "mfwm_x11.cpp"
 
+#define LOG(msg) fprintf(log_file, msg "\n"); fflush(log_file);
+#define LOGF(msg, ...) fprintf(log_file, msg "\n", __VA_ARGS__); fflush(log_file);
+#define ERROR(msg) fprintf(stderr, msg); exit(EXIT_FAILURE);
+#define ERRORF(msg, ...) fprintf(stderr, msg, __VA_ARGS__); exit(EXIT_FAILURE);
+FILE *log_file = NULL;
+
 #include "mfwm_wm.cpp"
 
 
@@ -67,13 +73,8 @@ mf_str state_get_window_name(State *state, u32 window) {
 void state_delete_window(State *state, u32 window) {
 }
 
-#define LOG(msg) fprintf(log_file, msg "\n"); fflush(log_file);
-#define LOGF(msg, ...) fprintf(log_file, msg "\n", __VA_ARGS__); fflush(log_file);
-#define ERROR(msg) fprintf(stderr, msg); exit(EXIT_FAILURE);
-#define ERRORF(msg, ...) fprintf(stderr, msg, __VA_ARGS__); exit(EXIT_FAILURE);
-static State state = {};
-FILE *log_file = NULL;
 
+static State state = {};
 #include "mfwm_commands.cpp"
 
 #include "../config.h"
@@ -160,6 +161,7 @@ void map_notify(XEvent &e) {
 
 void focus_in(XEvent &e) {
     XFocusChangeEvent event = e.xfocus;
+    log_event(__func__, event.window);
     //MF_Assert(!"INVALID");
 }
 
@@ -196,7 +198,6 @@ void enter_notify(XEvent &e) {
     }
 
     x11_window_focus(&state.x11, event.window);
-    LOG("enter notify end");
 }
 
 void map_request(XEvent &e) {
