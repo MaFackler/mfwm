@@ -92,11 +92,11 @@ void window_register(u32 window) {
 
 void window_focus(u32 window) {
     x11_window_focus(&state.x11, window);
-    x11_window_set_border(&state.x11, window, 3, state.color_button_window_bg);
+    x11_window_set_border(&state.x11, window, border_width_selected, state.color_button_window_bg);
 }
 
 void window_unfocus(u32 window) {
-    x11_window_set_border(&state.x11, window, 0, state.color_button_selected_window_bg);
+    x11_window_set_border(&state.x11, window, border_width_unselected, state.color_button_selected_window_bg);
 }
 
 void window_hide(u32 window) {
@@ -120,14 +120,19 @@ void do_layout(Rect *rect, vec(u32) windows) {
         i32 window_x = rect->x + GAP;
         i32 window_y = rect->y + STATUSBAR_HEIGHT + GAP;
 
-        i32 window_height = rect->h - (STATUSBAR_HEIGHT + 2 * GAP);
+        i32 amount_gaps = 2;
+        if (i > 0 && amount_windows > 2) {
+            amount_gaps += (amount_windows - 2);
+        }
+        float window_height = rect->h - (STATUSBAR_HEIGHT + (amount_gaps * GAP));
         i32 window_width = rect->w - 2 * GAP;
         if (amount_windows > 1) {
             window_width = (window_width - GAP) * 0.5;
             if (i > 0) {
                 window_x += window_width + GAP;
                 window_height /= (amount_windows - 1);
-                window_y += window_height * (i - 1);
+                //window_y += (window_height + GAP) * (i - 1);
+                window_y += (window_height + GAP) * (i - 1);
             }
         }
 
