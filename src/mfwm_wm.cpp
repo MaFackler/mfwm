@@ -146,6 +146,12 @@ Tag* window_manager_monitor_get_selected_tag(WindowManager *wm, Monitor *monitor
     return &monitor->tags[monitor->selected_tag];    
 }
 
+u32 window_manager_get_selected_window(WindowManager *wm) {
+    Monitor *mon = window_manager_get_selected_monitor(wm);
+    Tag *tag = window_manager_monitor_get_selected_tag(wm, mon);
+    return window_manager_tag_get_selected_window(wm, tag);
+}
+
 Tag* window_manager_monitor_add_tag(WindowManager *wm, Monitor *monitor, const char *name) {
     Tag *tag = mf_vec_add(monitor->tags); 
     tag->name = name;

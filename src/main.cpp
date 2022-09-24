@@ -7,6 +7,7 @@
 #include <X11/extensions/Xinerama.h>
 
 #include "mfwm_wm.h"
+#include <map>
 
 #include <mf.h>
 #define MF_VECTOR_IMPLEMENTATION
@@ -15,49 +16,24 @@
 #include <mf_string.h>
 #define MF_MATH_IMPLEMENTATION
 #include <mf_math.h>
+#include "mfwm.h"
+#include "mfwm_log.h"
 #include "mfwm_x11.h"
+
 #include "mfwm_x11.cpp"
-
-#define LOG(msg) fprintf(log_file, msg "\n"); fflush(log_file);
-#define LOGF(msg, ...) fprintf(log_file, msg "\n", __VA_ARGS__); fflush(log_file);
-#define ERROR(msg) fprintf(stderr, msg); exit(EXIT_FAILURE);
-#define ERRORF(msg, ...) fprintf(stderr, msg, __VA_ARGS__); exit(EXIT_FAILURE);
-FILE *log_file = NULL;
-
 #include "mfwm_wm.cpp"
-
-
-
-struct Statusbar {
-    i32 x;
-    i32 y;
-    i32 width;
-    i32 height;
-};
-
 
 
 struct State {
     bool running = true;
     // X11 Interface stuff
     X11Base x11;
-
-
     vec(X11Window) x11_statusbars;
-
     XColor color_debug;
-    XColor color_bar_bg;
-    XColor color_button_tag_bg;
-    XColor color_button_selected_tag_bg;
-    XColor color_button_tag_fg;
-
-    XColor color_button_window_bg;
-    XColor color_button_selected_window_bg;
-    XColor color_button_window_fg;
+    std::map<u32, XColor> colors;
 
     // Datastructures
     vec(Statusbar) statusbars;
-
     WindowManager wm;
 };
 
@@ -68,12 +44,6 @@ mf_str state_get_window_name(State *state, u32 window) {
     return s;
 }
 
-
-
-void state_delete_window(State *state, u32 window) {
-}
-
-
 static State state = {};
 #include "mfwm_commands.cpp"
 
@@ -82,6 +52,10 @@ static State state = {};
 #define LOG_FUNCTION(a, b, with_window)
 
 void render();
+
+XColor& get_color(u32 color) {
+    return state.colors[color];
+}
 
 void window_register(u32 window) {
     XSelectInput(state.x11.display,
@@ -92,11 +66,16 @@ void window_register(u32 window) {
 
 void window_focus(u32 window) {
     x11_window_focus(&state.x11, window);
-    x11_window_set_border(&state.x11, window, border_width_selected, state.color_button_window_bg);
+    x11_window_set_border(&state.x11,
+                          window,
+                          border_width_selected,
+                          //state.color_button_window_bg,
+                          get_color(colorschemes[ColorSchemeWindows].normal.bg));
 }
 
 void window_unfocus(u32 window) {
-    x11_window_set_border(&state.x11, window, border_width_unselected, state.color_button_selected_window_bg);
+    x11_window_set_border(&state.x11, window, border_width_unselected,
+                          get_color(colorschemes[ColorSchemeWindows].normal.bg));
 }
 
 void window_hide(u32 window) {
@@ -282,9 +261,9 @@ void render() {
 
         Monitor *mon = &state.wm.monitors[i];
         X11Window statusbar = state.x11_statusbars[i];
-        auto color = state.color_bar_bg;
+        XColor color = get_color(colorschemes[ColorSchemeBar].normal.bg);
         if (i == state.wm.selected_monitor) {
-            color = state.color_debug;
+            color = get_color(colorschemes[ColorSchemeBar].selected.bg);
         }
         x11_fill_rect(&state.x11, statusbar,
                       0, 0,
@@ -298,13 +277,14 @@ void render() {
         i32 x = spacing;
         i32 h = statusbar.height - 2 * spacing;
         for (i32 i = 0; i < mf_vec_size(mon->tags); ++i) {
+            // TODO: this is stupid. just reverence to tags???...
             mf_strview text = S(mon->tags[i].name);
             i32 w = x11_get_text_width(&state.x11, text.data, text.size);
             i32 w_total = w + x_margin * 2;
 
-            XColor c = state.color_button_tag_bg;
+            XColor c = get_color(colorschemes[ColorSchemeTags].normal.bg);
             if (i == mon->selected_tag) {
-                c = state.color_button_selected_tag_bg;
+                c = get_color(colorschemes[ColorSchemeTags].selected.bg);
             }
 
             x11_fill_rect(&state.x11, statusbar,
@@ -313,7 +293,8 @@ void render() {
             // TODO: Center Text
             x11_draw_text(&state.x11, statusbar, x + x_margin,
                           state.x11.font_height,
-                          text.data, text.size, state.color_button_tag_fg);
+                          text.data, text.size,
+                          get_color(colorschemes[ColorSchemeTags].normal.fg));
 
             x += w_total + spacing;
         }
@@ -326,9 +307,9 @@ void render() {
             LOG("going to get text width");
             i32 w = x11_get_text_width(&state.x11, text, strlen(text));
             i32 w_total = w + x_margin * 2;
-            XColor c = state.color_button_window_bg;
+            XColor c = get_color(colorschemes[ColorSchemeWindows].normal.bg);
             if (i == tag->selected_window) {
-                c = state.color_button_selected_window_bg;
+                c = get_color(colorschemes[ColorSchemeWindows].selected.bg);
             }
 
             x11_fill_rect(&state.x11, statusbar,
@@ -337,7 +318,8 @@ void render() {
             // TODO: Center Text
             x11_draw_text(&state.x11, statusbar,
                           x + x_margin, state.x11.font_height,
-                          text, strlen(text), state.color_button_window_fg);
+                          text, strlen(text),
+                          get_color(colorschemes[ColorSchemeWindows].normal.fg));
             x += w + spacing;
         }
         LOG("window buttons drawn");
@@ -347,7 +329,7 @@ void render() {
 }
 
 int main() {
-    log_file = fopen("./mfwm.log", "w");
+    log_init();
     MF_Assert(log_file);
     LOG("start");
 
@@ -355,16 +337,19 @@ int main() {
     x11_init(&state.x11);
 
     // TODO: What to do with alpha
-    state.color_debug = x11_add_color(&state.x11, 0xFF000000);
-    state.color_bar_bg = x11_add_color(&state.x11, 0x28282800);
+    for (u32 i = 0; i < ColorSchemeCount; ++i) {
+        ColorScheme scheme = colorschemes[i];
+#define __add_color(c) \
+        if (!state.colors.count(c)) \
+            state.colors[c] = x11_add_color(&state.x11, c);
 
-    state.color_button_tag_bg = x11_add_color(&state.x11, color_schemes[ColorSchemeTags][0].bg);
-    state.color_button_tag_fg = x11_add_color(&state.x11, color_schemes[ColorSchemeTags][0].fg);
-    state.color_button_selected_tag_bg = x11_add_color(&state.x11, color_schemes[ColorSchemeTags][1].bg);
+        __add_color(scheme.normal.fg);
+        __add_color(scheme.normal.bg);
+        __add_color(scheme.selected.fg);
+        __add_color(scheme.selected.bg);
+#undef __add_color
 
-    state.color_button_window_bg = x11_add_color(&state.x11, color_schemes[ColorSchemeWindows][0].bg);
-    state.color_button_window_fg = x11_add_color(&state.x11, color_schemes[ColorSchemeWindows][0].fg);
-    state.color_button_selected_window_bg = x11_add_color(&state.x11, color_schemes[ColorSchemeWindows][1].bg);
+    }
 
     bool isActive = XineramaIsActive(state.x11.display);
     i32 num_screens = 0;

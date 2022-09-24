@@ -53,11 +53,13 @@ void window_manager_tag_select(WindowManager *wm, u32 tag_index);
 // Getter
 Monitor* window_manager_get_selected_monitor(WindowManager *wm);
 Tag* window_manager_monitor_get_selected_tag(WindowManager *wm, Monitor *monitor);
+u32 window_manager_get_selected_window(WindowManager *wm);
 
 
 Monitor* window_manager_add_monitor(WindowManager *wm, Rect rect);
 Monitor* window_manager_select_monitor(WindowManager *wm, i32 index);
 
+// TODO: clean up functions
 Tag* window_manager_get_selected_tag(WindowManager *wm);
 Tag* window_manager_monitor_add_tag(WindowManager *wm, Monitor *monitor, const char *name);
 Tag* window_manager_monitor_select_tag(WindowManager *wm, Monitor *monitor, i32 index);

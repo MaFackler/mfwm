@@ -62,20 +62,19 @@ void select_tag_nr(Arg arg) {
     window_manager_tag_select(&state.wm, arg.Int);
 }
 
-struct ColorSchemeDefinition {
-    u32 fg;
-    u32 bg;
-};
 
 enum {
+    ColorSchemeBar,
     ColorSchemeTags,
     ColorSchemeWindows,
+    ColorSchemeCount,
 };
 
 static int border_width_selected = 2;
 static int border_width_unselected = 1;
 
-static const ColorSchemeDefinition color_schemes[][2] = {
+static const ColorScheme colorschemes[] = {
+    [ColorSchemeBar] = {{ 0x0, 0x0}, {0x0, 0x0}},
     [ColorSchemeTags] = {{ 0x0, 0x45858800 }, {0x0, 0x83a59800}},
     [ColorSchemeWindows] = {{ 0x0, 0x689d6a00 }, {0x0, 0x8ec07c00}},
 };
