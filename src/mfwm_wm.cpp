@@ -6,8 +6,9 @@ void window_manager_window_add(WindowManager *wm, u32 window, const char *window
         u32 old_window = window_manager_tag_get_selected_window(wm, tag);
         wm->api.window_unfocus(old_window);
     }
-    u32 index = mf_vec_push(tag->windows, window);
-    mf_vec_push(tag->window_names, window_name);
+    tag->windows.push_back(window);
+    u64 index = tag->windows.size() - 1;
+    tag->window_names.push_back(window_name);
     tag->selected_window = index;
     wm->api.window_register(window);
     wm->api.window_focus(window);
@@ -17,13 +18,15 @@ void window_manager_window_add(WindowManager *wm, u32 window, const char *window
 void window_manager_window_delete(WindowManager *wm, u32 window) {
     Monitor *mon = window_manager_get_selected_monitor(wm);
     Tag *tag = window_manager_monitor_get_selected_tag(wm, mon);
-    i32 index = mf_vec_index(tag->windows, (u32) window);
-    if (index >= 0) {
-        mf_vec_delete(tag->windows, index);
-        mf_vec_delete(tag->window_names, index);
+    auto ele = std::find(tag->windows.begin(), tag->windows.end(), window);
+    u64 index = ele - tag->windows.begin();
+
+    if (ele != tag->windows.end()) {
+        tag->windows.erase(ele);
+        tag->window_names.erase(tag->window_names.begin() + index);
 
         wm->api.do_layout(&mon->rect, tag->windows);
-        tag->selected_window = MF_Min(index, mf_vec_size(tag->windows) - 1);
+        tag->selected_window = std::min(index, tag->windows.size() - 1);
         if (window_manager_tag_has_windows(wm, tag)) {
             wm->api.window_focus(window_manager_tag_get_selected_window(wm, tag));
         }
@@ -51,7 +54,7 @@ void window_manager_window_focus(WindowManager *wm, u32 window) {
 void window_manager_window_next(WindowManager *wm) {
     Monitor *mon = window_manager_get_selected_monitor(wm);
     Tag *tag = window_manager_monitor_get_selected_tag(wm, mon);
-    i32 amount_windows = mf_vec_size(tag->windows);
+    i32 amount_windows = tag->windows.size();
     if (amount_windows > 0) {
         wm->api.window_unfocus(window_manager_tag_get_selected_window(wm, tag));
         tag->selected_window = MF_Min(tag->selected_window + 1, amount_windows - 1);
@@ -62,10 +65,10 @@ void window_manager_window_next(WindowManager *wm) {
 void window_manager_window_previous(WindowManager *wm) {
     Monitor *mon = window_manager_get_selected_monitor(wm);
     Tag *tag = window_manager_monitor_get_selected_tag(wm, mon);
-    u32 amount_windows = mf_vec_size(tag->windows);
+    u32 amount_windows = tag->windows.size();
     if (amount_windows > 0) {
         wm->api.window_unfocus(window_manager_tag_get_selected_window(wm, tag));
-        tag->selected_window = MF_Max(tag->selected_window - 1, 0);
+        tag->selected_window = std::max(tag->selected_window - 1, 0);
         wm->api.window_focus(window_manager_tag_get_selected_window(wm, tag));
     }
 }
@@ -73,8 +76,8 @@ void window_manager_window_previous(WindowManager *wm) {
 void window_manager_tag_select(WindowManager *wm, u32 tag_index) {
     Monitor *mon = window_manager_get_selected_monitor(wm);
     Tag *tag = window_manager_monitor_get_selected_tag(wm, mon);
-    mf_vec_for(tag->windows) {
-        wm->api.window_hide(*it);
+    for(u32 it : tag->windows) {
+        wm->api.window_hide(it);
     }
     tag = window_manager_monitor_select_tag(wm, mon, tag_index);
 
@@ -87,15 +90,12 @@ void window_manager_tag_select(WindowManager *wm, u32 tag_index) {
 }
 
 bool window_manager_tag_has_window(WindowManager *wm, Tag *tag, u32 window) {
-    mf_vec_for(tag->windows) {
-        if (*it == window)
-            return true;
-    }
-    return false;
+    auto it = std::find(tag->windows.begin(), tag->windows.end(), window);
+    return it != tag->windows.end();
 }
 
 bool window_manager_tag_has_windows(WindowManager *wm, Tag *tag) {
-    return mf_vec_size(tag->windows) > 0;
+    return tag->windows.size() > 0;
 }
 
 u32 window_manager_tag_get_selected_window(WindowManager *wm, Tag *tag) {
@@ -103,7 +103,7 @@ u32 window_manager_tag_get_selected_window(WindowManager *wm, Tag *tag) {
 }
 
 void window_manager_tag_select_window(WindowManager *wm, Tag *tag, u32 window) {
-    for (i32 i = 0; i < mf_vec_size(tag->windows); ++i) {
+    for (i32 i = 0; i < tag->windows.size(); ++i) {
         if (tag->windows[i] == window) {
             u32 old_window = window_manager_tag_get_selected_window(wm, tag);
 
@@ -118,12 +118,11 @@ void window_manager_tag_select_window(WindowManager *wm, Tag *tag, u32 window) {
 
 
 Monitor* window_manager_add_monitor(WindowManager *wm, Rect rect) {
-    wm->selected_monitor = mf_vec_size(wm->monitors);
-    Monitor *monitor = mf_vec_add(wm->monitors);
-    monitor->rect = rect;
-    monitor->tags = NULL;
-    monitor->selected_tag = 0;
-    return monitor;
+    wm->selected_monitor = wm->monitors.size();
+    Monitor &monitor = wm->monitors.emplace_back();
+    monitor.rect = rect;
+    monitor.selected_tag = 0;
+    return &monitor;
 }
 
 
@@ -152,12 +151,10 @@ u32 window_manager_get_selected_window(WindowManager *wm) {
 }
 
 Tag* window_manager_monitor_add_tag(WindowManager *wm, Monitor *monitor, const char *name) {
-    Tag *tag = mf_vec_add(monitor->tags); 
-    tag->name = name;
-    tag->selected_window = 0;
-    tag->windows = NULL;
-    tag->window_names = NULL;
-    return tag;
+    Tag &tag = monitor->tags.emplace_back(); 
+    tag.name = name;
+    tag.selected_window = 0;
+    return &tag;
 }
 
 Tag* window_manager_monitor_select_tag(WindowManager *wm, Monitor *monitor, i32 index) {

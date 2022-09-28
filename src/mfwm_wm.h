@@ -1,10 +1,11 @@
 #pragma once
 #include <mf.h>
 #include <string>
-#define MF_VECTOR_IMPLEMENTATION
-#include <mf_vector.h>
+#include <vector>
+#include <algorithm>
 
 using std::string;
+using std::vector;
 
 
 // TODO: Rect maybe from mf_math
@@ -20,28 +21,28 @@ struct WindowManagerApi {
     void (*window_focus)(u32 window);
     void (*window_unfocus)(u32 window);
     void (*window_hide)(u32 window);
-    void (*do_layout)(Rect *rect, vec<u32> windows);
+    void (*do_layout)(Rect *rect, const vector<u32> &windows);
 };
 
 struct Tag {
     const char *name;
     i32 selected_window = 0;
-    vec<u32> windows = NULL;
-    vec<string> window_names = NULL;
+    vector<u32> windows;
+    vector<string> window_names;
 };
 
 
 struct Monitor {
     Rect rect;
     i32 selected_tag = 0;
-    vec<Tag> tags = NULL;
+    vector<Tag> tags;
 };
 
 
 struct WindowManager {
     WindowManagerApi api; 
     i32 selected_monitor = 0;
-    vec<Monitor> monitors = NULL;
+    vector<Monitor> monitors;
 };
 
 void window_manager_window_add(WindowManager *wm, u32 window, const char *window_name);

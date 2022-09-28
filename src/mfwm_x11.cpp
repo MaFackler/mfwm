@@ -91,14 +91,14 @@ void x11_window_set_border(X11Base *x11, Window window, i32 width, XColor color)
 
 
 XColor x11_add_color(X11Base *x11, u8 r, u8 g, u8 b) {
-    size_t res = mf_vec_size(x11->colors);
-    XColor *color = mf_vec_add(x11->colors);
-    color->red = r * 255;
-    color->green = g * 255;
-    color->blue = b * 255;
-    color->flags = DoRed | DoGreen | DoBlue;
-    XAllocColor(x11->display, x11->colormap, color);
-    return *color;
+    size_t res = x11->colors.size();
+    XColor &color = x11->colors.emplace_back();
+    color.red = r * 255;
+    color.green = g * 255;
+    color.blue = b * 255;
+    color.flags = DoRed | DoGreen | DoBlue;
+    XAllocColor(x11->display, x11->colormap, &color);
+    return color;
 }
 
 XColor x11_add_color(X11Base *x11, u32 color) {

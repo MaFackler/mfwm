@@ -16,7 +16,7 @@ struct X11Base {
     Colormap colormap = {};
     GC gc;
 
-    XColor *colors = NULL;
+    vector<XColor> colors;
 
 
     XFontStruct *font;

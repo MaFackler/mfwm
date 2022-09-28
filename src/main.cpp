@@ -10,6 +10,7 @@
 #include <map>
 #include <array>
 #include <string>
+#include <vector>
 
 #include <mf.h>
 #define MF_MATH_IMPLEMENTATION
@@ -24,17 +25,18 @@
 using std::array;
 using std::map;
 using std::string_view;
+using std::vector;
 
 struct State {
     bool running = true;
     // X11 Interface stuff
     X11Base x11;
-    vec<X11Window> x11_statusbars = NULL;
+    vector<X11Window> x11_statusbars;
     XColor color_debug;
     map<u32, XColor> colors;
 
     // Datastructures
-    vec<Statusbar> statusbars = NULL;
+    vector<Statusbar> statusbars;
     WindowManager wm;
 };
 
@@ -83,9 +85,9 @@ void window_hide(u32 window) {
     x11_window_hide(&state.x11, window);
 }
 
-void do_layout(Rect *rect, vec<u32> windows) {
+void do_layout(Rect *rect, const vector<u32> &windows) {
     X11Base *x11 = &state.x11;
-    i32 amount_windows = mf_vec_size(windows);
+    i32 amount_windows = windows.size();
     for (i32 i = 0; i < amount_windows; ++i) {
         u32 window = windows[i]; 
         string buf(256, '\0');
@@ -156,7 +158,7 @@ void motion_notify(XEvent &e) {
     if (event.window != state.x11.root) {
         return;
     }
-    for (i32 i = 0; i < mf_vec_size(state.wm.monitors); ++i) {
+    for (i32 i = 0; i < state.wm.monitors.size(); ++i) {
         Monitor *it = &state.wm.monitors[i];
         if (x >= it->rect.x && x < it->rect.x + it->rect.w) {
             if (i != state.wm.selected_monitor) {
@@ -255,7 +257,7 @@ void key_press(XEvent &e) {
 void render() {
 
     LOG("do render");
-    for (i32 i = 0; i < mf_vec_size(state.wm.monitors); ++i) {
+    for (i32 i = 0; i < state.wm.monitors.size(); ++i) {
 
         Monitor *mon = &state.wm.monitors[i];
         X11Window statusbar = state.x11_statusbars[i];
@@ -274,7 +276,7 @@ void render() {
         i32 spacing = 1;
         i32 x = spacing;
         i32 h = statusbar.height - 2 * spacing;
-        for (i32 i = 0; i < mf_vec_size(mon->tags); ++i) {
+        for (i32 i = 0; i < mon->tags.size(); ++i) {
             // TODO: this is stupid. just reverence to tags???...
             string_view text(mon->tags[i].name);
             i32 w = x11_get_text_width(&state.x11, text.data(), text.size());
@@ -300,7 +302,7 @@ void render() {
         LOG("tags drawn");
 
         Tag *tag = window_manager_monitor_get_selected_tag(&state.wm, mon);
-        for (i32 i = 0; i < mf_vec_size(tag->window_names); ++i) {
+        for (i32 i = 0; i < tag->window_names.size(); ++i) {
             string &text = tag->window_names[i];
             LOG("going to get text width");
             i32 w = x11_get_text_width(&state.x11, text.data(), text.size());
@@ -366,17 +368,17 @@ int main() {
         LOGF("Got scren number %d (%d+%d %dx%d)", info[i].screen_number, rect.x, rect.y, rect.w, rect.h);
         window_manager_add_monitor(&state.wm, rect);
         Statusbar statusbar = {rect.x, rect.y, rect.w, STATUSBAR_HEIGHT};
-        mf_vec_push(state.statusbars, statusbar);
+        state.statusbars.emplace_back(statusbar);
         X11Window window = x11_window_create(&state.x11,
                                              statusbar.x, statusbar.y,
                                              statusbar.width, statusbar.height);
-        mf_vec_push(state.x11_statusbars, window);
+        state.x11_statusbars.push_back(window);
     }
 
 
-    mf_vec_for(state.wm.monitors) {
+    for(auto &it: state.wm.monitors) {
         for (i32 i = 0; i < MF_ArrayLength(tags); ++i) {
-            window_manager_monitor_add_tag(&state.wm, it, tags[i]);
+            window_manager_monitor_add_tag(&state.wm, &it, tags[i]);
         }
     }
 
@@ -442,8 +444,8 @@ int main() {
 
     fclose(log_file);
 
-    mf_vec_for(state.x11_statusbars) {
-        x11_window_destroy(&state.x11, *it);
+    for (X11Window &window: state.x11_statusbars) {
+        x11_window_destroy(&state.x11, window);
     }
     x11_shutdown(&state.x11);
 }
