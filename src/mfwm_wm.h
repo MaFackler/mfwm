@@ -19,28 +19,28 @@ struct WindowManagerApi {
     void (*window_focus)(u32 window);
     void (*window_unfocus)(u32 window);
     void (*window_hide)(u32 window);
-    void (*do_layout)(Rect *rect, vec(u32) windows);
+    void (*do_layout)(Rect *rect, vec<u32> windows);
 };
 
 struct Tag {
     const char *name;
     i32 selected_window = 0;
-    vec(u32) windows = NULL;
-    vec(mf_str) window_names = NULL;
+    vec<u32> windows = NULL;
+    vec<mf_str> window_names = NULL;
 };
 
 
 struct Monitor {
     Rect rect;
     i32 selected_tag = 0;
-    vec(Tag) tags = NULL;
+    vec<Tag> tags = NULL;
 };
 
 
 struct WindowManager {
     WindowManagerApi api; 
     i32 selected_monitor = 0;
-    vec(Monitor) monitors = NULL;
+    vec<Monitor> monitors = NULL;
 };
 
 void window_manager_window_add(WindowManager *wm, u32 window, mf_str window_name);

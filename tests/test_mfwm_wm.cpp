@@ -1,7 +1,7 @@
 void dummy(u32 window) {
 }
 
-void dummy_layout(Rect *rec, vec(u32) windows) {
+void dummy_layout(Rect *rec, vec<u32> windows) {
 }
 
 WindowManager setup() {

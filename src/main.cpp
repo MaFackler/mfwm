@@ -28,12 +28,12 @@ struct State {
     bool running = true;
     // X11 Interface stuff
     X11Base x11;
-    vec(X11Window) x11_statusbars;
+    vec<X11Window> x11_statusbars = NULL;
     XColor color_debug;
     std::map<u32, XColor> colors;
 
     // Datastructures
-    vec(Statusbar) statusbars;
+    vec<Statusbar> statusbars = NULL;
     WindowManager wm;
 };
 
@@ -82,7 +82,7 @@ void window_hide(u32 window) {
     x11_window_hide(&state.x11, window);
 }
 
-void do_layout(Rect *rect, vec(u32) windows) {
+void do_layout(Rect *rect, vec<u32> windows) {
     X11Base *x11 = &state.x11;
     i32 amount_windows = mf_vec_size(windows);
     for (i32 i = 0; i < amount_windows; ++i) {
