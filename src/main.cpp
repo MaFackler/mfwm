@@ -8,14 +8,10 @@
 
 #include "mfwm_wm.h"
 #include <map>
-
 #include <array>
+#include <string>
 
 #include <mf.h>
-#define MF_VECTOR_IMPLEMENTATION
-#include <mf_vector.h>
-#define MF_STRING_IMPLEMENTATION
-#include <mf_string.h>
 #define MF_MATH_IMPLEMENTATION
 #include <mf_math.h>
 #include "mfwm.h"
@@ -26,6 +22,8 @@
 #include "mfwm_wm.cpp"
 
 using std::array;
+using std::map;
+using std::string_view;
 
 struct State {
     bool running = true;
@@ -33,18 +31,18 @@ struct State {
     X11Base x11;
     vec<X11Window> x11_statusbars = NULL;
     XColor color_debug;
-    std::map<u32, XColor> colors;
+    map<u32, XColor> colors;
 
     // Datastructures
     vec<Statusbar> statusbars = NULL;
     WindowManager wm;
 };
 
-mf_str state_get_window_name(State *state, u32 window) {
-    mf_str s = mf_str_new(256);
-    x11_get_window_name(&state->x11, window, s, mf_str_capacity(s));
-    mf__str_get_header(s)->size = strlen(s);
-    return s;
+inline std::string state_get_window_name(State *state, u32 window) {
+    string res(256, '\0');
+    x11_get_window_name(&state->x11, window, res.data(), res.size());
+    res.resize(strlen(res.data()));
+    return res;
 }
 
 static State state = {};
@@ -90,9 +88,9 @@ void do_layout(Rect *rect, vec<u32> windows) {
     i32 amount_windows = mf_vec_size(windows);
     for (i32 i = 0; i < amount_windows; ++i) {
         u32 window = windows[i]; 
-        array<char, 256> buf = {};
+        string buf(256, '\0');
         x11_get_window_name(x11, window, &buf[0], buf.size());
-        mf__str_get_header(&buf[0])->size = strlen(&buf[0]);
+        buf.resize(strlen(&buf[0]));
         LOGF("Window name is nr=%d id=%d-%s", i, window, buf);
 
         // Calculate
@@ -187,8 +185,8 @@ void enter_notify(XEvent &e) {
 void map_request(XEvent &e) {
     XMapRequestEvent event = e.xmaprequest;
     log_event(__func__, event.window);
-    mf_str window_name = state_get_window_name(&state, event.window);
-    window_manager_window_add(&state.wm, event.window, window_name);
+    string window_name = state_get_window_name(&state, event.window);
+    window_manager_window_add(&state.wm, event.window, window_name.c_str());
     XSync(state.x11.display, 0);
 }
 
@@ -278,8 +276,8 @@ void render() {
         i32 h = statusbar.height - 2 * spacing;
         for (i32 i = 0; i < mf_vec_size(mon->tags); ++i) {
             // TODO: this is stupid. just reverence to tags???...
-            mf_strview text = S(mon->tags[i].name);
-            i32 w = x11_get_text_width(&state.x11, text.data, text.size);
+            string_view text(mon->tags[i].name);
+            i32 w = x11_get_text_width(&state.x11, text.data(), text.size());
             i32 w_total = w + x_margin * 2;
 
             XColor c = get_color(colorschemes[ColorSchemeTags].normal.bg);
@@ -293,7 +291,7 @@ void render() {
             // TODO: Center Text
             x11_draw_text(&state.x11, statusbar, x + x_margin,
                           state.x11.font_height,
-                          text.data, text.size,
+                          text.data(), text.size(),
                           get_color(colorschemes[ColorSchemeTags].normal.fg));
 
             x += w_total + spacing;
@@ -303,9 +301,9 @@ void render() {
 
         Tag *tag = window_manager_monitor_get_selected_tag(&state.wm, mon);
         for (i32 i = 0; i < mf_vec_size(tag->window_names); ++i) {
-            const char *text = tag->window_names[i];
+            string &text = tag->window_names[i];
             LOG("going to get text width");
-            i32 w = x11_get_text_width(&state.x11, text, strlen(text));
+            i32 w = x11_get_text_width(&state.x11, text.data(), text.size());
             i32 w_total = w + x_margin * 2;
             XColor c = get_color(colorschemes[ColorSchemeWindows].normal.bg);
             if (i == tag->selected_window) {
@@ -318,7 +316,7 @@ void render() {
             // TODO: Center Text
             x11_draw_text(&state.x11, statusbar,
                           x + x_margin, state.x11.font_height,
-                          text, strlen(text),
+                          text.data(), text.size(),
                           get_color(colorschemes[ColorSchemeWindows].normal.fg));
             x += w + spacing;
         }

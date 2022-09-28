@@ -1,9 +1,10 @@
 #pragma once
 #include <mf.h>
-#define MF_STRING_IMPLEMENTATION
-#include <mf_string.h>
+#include <string>
 #define MF_VECTOR_IMPLEMENTATION
 #include <mf_vector.h>
+
+using std::string;
 
 
 // TODO: Rect maybe from mf_math
@@ -26,7 +27,7 @@ struct Tag {
     const char *name;
     i32 selected_window = 0;
     vec<u32> windows = NULL;
-    vec<mf_str> window_names = NULL;
+    vec<string> window_names = NULL;
 };
 
 
@@ -43,7 +44,7 @@ struct WindowManager {
     vec<Monitor> monitors = NULL;
 };
 
-void window_manager_window_add(WindowManager *wm, u32 window, mf_str window_name);
+void window_manager_window_add(WindowManager *wm, u32 window, const char *window_name);
 void window_manager_window_delete(WindowManager *wm, u32 window);
 void window_manager_window_focus(WindowManager *wm, u32 window);
 void window_manager_window_next(WindowManager *wm);

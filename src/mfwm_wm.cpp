@@ -1,4 +1,4 @@
-void window_manager_window_add(WindowManager *wm, u32 window, mf_str window_name) {
+void window_manager_window_add(WindowManager *wm, u32 window, const char *window_name) {
     Monitor *mon = window_manager_get_selected_monitor(wm);
     Tag *tag = window_manager_monitor_get_selected_tag(wm, mon);
 
@@ -20,8 +20,7 @@ void window_manager_window_delete(WindowManager *wm, u32 window) {
     i32 index = mf_vec_index(tag->windows, (u32) window);
     if (index >= 0) {
         mf_vec_delete(tag->windows, index);
-        mf_str *s = mf_vec_delete(tag->window_names, index);
-        mf_str_free(*s);
+        mf_vec_delete(tag->window_names, index);
 
         wm->api.do_layout(&mon->rect, tag->windows);
         tag->selected_window = MF_Min(index, mf_vec_size(tag->windows) - 1);
