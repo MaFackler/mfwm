@@ -4,6 +4,7 @@ LIBS=-lX11 -lXinerama -lm -lstdc++
 # SRCS=src/main.cpp src/mfwm_x11.h src/mfwm_x11.cpp src/mfwm_wm.h src/mfwm_wm.cpp config.h
 SRCS=$(wildcard src/*.cpp)
 SRCS+=$(wildcard src/*.h)
+SRCS+=config.h
 
 # CONTANTS
 TEST_RESOLUTION=1600x900

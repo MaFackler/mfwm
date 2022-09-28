@@ -11,6 +11,8 @@
 #include <array>
 #include <string>
 #include <vector>
+#include <thread>
+#include <chrono>
 
 #include <mf.h>
 #define MF_MATH_IMPLEMENTATION
@@ -32,8 +34,9 @@ struct State {
     // X11 Interface stuff
     X11Base x11;
     vector<X11Window> x11_statusbars;
-    XColor color_debug;
     map<u32, XColor> colors;
+
+    string time;
 
     // Datastructures
     vector<Statusbar> statusbars;
@@ -253,10 +256,17 @@ void key_press(XEvent &e) {
 }
 
 
+string get_time_string() {
+    time_t current_time;
+    time(&current_time);
+    struct tm *local_time = localtime(&current_time);
+    return asctime(local_time);
+}
 
 void render() {
 
     LOG("do render");
+    i32 text_width = x11_get_text_width(&state.x11, state.time.c_str(), state.time.size());
     for (i32 i = 0; i < state.wm.monitors.size(); ++i) {
 
         Monitor *mon = &state.wm.monitors[i];
@@ -321,12 +331,41 @@ void render() {
                           text.data(), text.size(),
                           get_color(colorschemes[ColorSchemeWindows].normal.fg));
             x += w + spacing;
+
         }
+        // TIME
+        x11_draw_text(&state.x11, statusbar,
+                      statusbar.width - text_width, state.x11.font_height,
+                      state.time.c_str(), state.time.size() - 1,
+                      get_color(colorschemes[ColorSchemeBar].normal.fg));
         LOG("window buttons drawn");
     }
+
     LOG("dorender end");
     //XSync(state.x11.display, False);
 }
+
+void time_update(State *state) {
+    while (state->running) {
+
+        for (auto &x11_window: state->x11_statusbars) {
+            XEvent event = {};
+            event.type = Expose;
+            event.xexpose.window = x11_window.window;
+            state->time = get_time_string();
+
+            XSendEvent(state->x11.display,
+                       event.xexpose.window,
+                       False,
+                       ExposureMask, &event);
+        }
+
+        XFlush(state->x11.display);
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+}
+
 
 int main() {
     log_init();
@@ -354,7 +393,9 @@ int main() {
     bool isActive = XineramaIsActive(state.x11.display);
     i32 num_screens = 0;
     XineramaScreenInfo *info = XineramaQueryScreens(state.x11.display, &num_screens);
+    state.time = get_time_string();
 
+    std::thread thread_time_update(time_update, &state);
     // Setup datastructures
     for (i32 i = 0; i < num_screens; ++i) {
 
@@ -401,52 +442,52 @@ int main() {
     state.wm.api.window_hide = window_hide;
     state.wm.api.do_layout = do_layout;
 
-    while (state.running) {
-        if (XPending(state.x11.display) > 0) {
-            XEvent e;
-            XNextEvent(state.x11.display, &e);
+    XEvent e;
+    while (state.running && !XNextEvent(state.x11.display, &e)) {
 
-            if (e.type != 6) {
-                //LOGF("GOT EVENT %d", e.type);
-            }
-            switch (e.type) {
-                case ButtonPress: button_press(e); break;
-                case KeyPress: key_press(e); break;
-                case KeyRelease: break;
-                case UnmapNotify: unmap_request(e); break;
+        if (e.type != 6) {
+            //LOGF("GOT EVENT %d", e.type);
+        }
+        switch (e.type) {
+            case ButtonPress: button_press(e); break;
+            case KeyPress: key_press(e); break;
+            case KeyRelease: break;
+            case UnmapNotify: unmap_request(e); break;
 
-                case NoExpose: break;
+            case NoExpose: break;
 
-                // These events are in order of the event chain
-                case CreateNotify: break;
-                case ConfigureRequest: configure_request(e); break;
-                case ConfigureNotify: configure_notify(e); break;
-                case MapRequest: map_request(e); break;
-                case MapNotify: map_notify(e); break;
-                case Expose: render(); break;
-                // --------
-                //
-                case FocusIn: focus_in(e); break;
-                case MotionNotify: motion_notify(e); break;
+            // These events are in order of the event chain
+            case CreateNotify: break;
+            case ConfigureRequest: configure_request(e); break;
+            case ConfigureNotify: configure_notify(e); break;
+            case MapRequest: map_request(e); break;
+            case MapNotify: map_notify(e); break;
+            case Expose: render(); break;
+            // --------
+            //
+            case FocusIn: focus_in(e); break;
+            case MotionNotify: motion_notify(e); break;
 
-                case EnterNotify: enter_notify(e); break;
-                case DestroyNotify: break;
-                case PropertyNotify: break;
+            case EnterNotify: enter_notify(e); break;
+            case DestroyNotify: break;
+            case PropertyNotify: break;
 
-                case FocusOut: break;
-                case ClientMessage: break;
-                case MappingNotify: break;
-                default: ERRORF("Unhandled event %d\n", e.type); break;
+            case FocusOut: break;
+            case ClientMessage: break;
+            case MappingNotify: break;
+            default: ERRORF("Unhandled event %d\n", e.type); break;
 
-            }
         }
     }
 
     fclose(log_file);
 
+    thread_time_update.join();
+
     for (X11Window &window: state.x11_statusbars) {
         x11_window_destroy(&state.x11, window);
     }
     x11_shutdown(&state.x11);
+
 }
 
