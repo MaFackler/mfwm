@@ -120,42 +120,43 @@ void x11_window_hide(X11Base *x11, Window window) {
     x11_window_move(x11, window, -4000, 0);
 }
 
-void x11_window_set_border(X11Base *x11, Window window, i32 width, XColor color) {
-    XSetWindowBorder(x11->display, window, color.pixel);
+void x11_window_set_border(X11Base *x11, Window window, i32 width, u32 color) {
+    XSetWindowBorder(x11->display, window, x11->colors[color].pixel);
     XWindowChanges c = {};
     c.border_width = width;
     XConfigureWindow(x11->display, window, CWBorderWidth, &c);
 }
 
 
-XColor x11_add_color(X11Base *x11, u8 r, u8 g, u8 b) {
-    size_t res = x11->colors.size();
-    XColor &color = x11->colors.emplace_back();
-    color.red = r * 255;
-    color.green = g * 255;
-    color.blue = b * 255;
-    color.flags = DoRed | DoGreen | DoBlue;
-    XAllocColor(x11->display, x11->colormap, &color);
-    return color;
+
+void x11_add_color(X11Base *x11, u32 color) {
+    //u8 r = (color >> 24) & 0xFF;
+    //u8 g = (color >> 16) & 0xFF;
+    //u8 b = (color >> 8) & 0xFF;
+    XftColor &dest = x11->colors[color];
+
+    XRenderColor *rc = (XRenderColor *) &color;
+    MF_Assert(XftColorAllocValue(x11->display,
+                                 x11->visual,
+                                 x11->colormap,
+                                 rc,
+                                 &dest));
+
+    //MF_Assert(XftColorAllocName(x11->display, x11->visual, x11->colormap, "#ffffff", &dest));
+    //u8 alpha = 0x0F;
+    //res.pixel = (res.pixel & 0x00ffffffU) | (alpha << 24);
+    dest.pixel = color;
 }
 
-XColor x11_add_color(X11Base *x11, u32 color) {
-    u8 r = (color >> 24) & 0xFF;
-    u8 g = (color >> 16) & 0xFF;
-    u8 b = (color >> 8) & 0xFF;
-    XColor res = x11_add_color(x11, r, g, b);
-    return res;
-}
-
-void x11_fill_rect(X11Base *x11, X11Window &window, i32 x, i32 y, u32 w, u32 h, XColor color) {
-    XSetForeground(x11->display, window.gc, color.pixel);
-    XSetBackground(x11->display, window.gc, color.pixel);
+void x11_fill_rect(X11Base *x11, X11Window &window, i32 x, i32 y, u32 w, u32 h, u32 color) {
+    XSetForeground(x11->display, window.gc, x11->colors[color].pixel);
+    XSetBackground(x11->display, window.gc, x11->colors[color].pixel);
     XFillRectangle(x11->display, window.draw, window.gc, x, y, w, h);
     XCopyArea(x11->display, window.draw, window.window, window.gc, 0, 0, window.width, window.height, 0, 0);
 }
 
-void x11_draw_text(X11Base *x11, X11Window &window, i32 x, i32 y, const char *text, u64 n, XColor color) {
-    XSetForeground(x11->display, window.gc, color.pixel);
+void x11_draw_text(X11Base *x11, X11Window &window, i32 x, i32 y, const char *text, u64 n, u32 color) {
+    XSetForeground(x11->display, window.gc, x11->colors[color].pixel);
     XDrawString(x11->display, window.draw, window.gc, x, y, text, n);
     XCopyArea(x11->display, window.draw, window.window, window.gc, 0, 0, window.width, window.height, 0, 0);
 }

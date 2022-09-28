@@ -1,9 +1,10 @@
+#include <assert.h>
 #include <stdio.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
-//#include <X11/Xft/Xft.h>
+#include <X11/Xft/Xft.h>
 #include <X11/extensions/Xinerama.h>
 #include <X11/extensions/Xrender.h>
 
@@ -35,7 +36,6 @@ struct State {
     // X11 Interface stuff
     X11Base x11;
     vector<X11Window> x11_statusbars;
-    map<u32, XColor> colors;
 
     string time;
 
@@ -60,10 +60,6 @@ static State state = {};
 
 void render();
 
-XColor& get_color(u32 color) {
-    return state.colors[color];
-}
-
 void window_register(u32 window) {
     XSelectInput(state.x11.display,
                  window,
@@ -77,12 +73,12 @@ void window_focus(u32 window) {
                           window,
                           border_width_selected,
                           //state.color_button_window_bg,
-                          get_color(colorschemes[ColorSchemeWindows].normal.bg));
+                          colorschemes[ColorSchemeWindows].normal.bg);
 }
 
 void window_unfocus(u32 window) {
     x11_window_set_border(&state.x11, window, border_width_unselected,
-                          get_color(colorschemes[ColorSchemeWindows].normal.bg));
+                          colorschemes[ColorSchemeWindows].normal.bg);
 }
 
 void window_hide(u32 window) {
@@ -272,9 +268,9 @@ void render() {
 
         Monitor *mon = &state.wm.monitors[i];
         X11Window statusbar = state.x11_statusbars[i];
-        XColor color = get_color(colorschemes[ColorSchemeBar].normal.bg);
+        u32 color = colorschemes[ColorSchemeBar].normal.bg;
         if (i == state.wm.selected_monitor) {
-            color = get_color(colorschemes[ColorSchemeBar].selected.bg);
+            color = colorschemes[ColorSchemeBar].selected.bg;
         }
         x11_fill_rect(&state.x11, statusbar,
                       0, 0,
@@ -293,9 +289,9 @@ void render() {
             i32 w = x11_get_text_width(&state.x11, text.data(), text.size());
             i32 w_total = w + x_margin * 2;
 
-            XColor c = get_color(colorschemes[ColorSchemeTags].normal.bg);
+            u32 c = colorschemes[ColorSchemeTags].normal.bg;
             if (i == mon->selected_tag) {
-                c = get_color(colorschemes[ColorSchemeTags].selected.bg);
+                c = colorschemes[ColorSchemeTags].selected.bg;
             }
 
             x11_fill_rect(&state.x11, statusbar,
@@ -305,7 +301,7 @@ void render() {
             x11_draw_text(&state.x11, statusbar, x + x_margin,
                           state.x11.font_height,
                           text.data(), text.size(),
-                          get_color(colorschemes[ColorSchemeTags].normal.fg));
+                          colorschemes[ColorSchemeTags].normal.fg);
 
             x += w_total + spacing;
         }
@@ -318,9 +314,9 @@ void render() {
             LOG("going to get text width");
             i32 w = x11_get_text_width(&state.x11, text.data(), text.size());
             i32 w_total = w + x_margin * 2;
-            XColor c = get_color(colorschemes[ColorSchemeWindows].normal.bg);
+            u32 c = colorschemes[ColorSchemeWindows].normal.bg;
             if (i == tag->selected_window) {
-                c = get_color(colorschemes[ColorSchemeWindows].selected.bg);
+                c = colorschemes[ColorSchemeWindows].selected.bg;
             }
 
             x11_fill_rect(&state.x11, statusbar,
@@ -330,7 +326,7 @@ void render() {
             x11_draw_text(&state.x11, statusbar,
                           x + x_margin, state.x11.font_height,
                           text.data(), text.size(),
-                          get_color(colorschemes[ColorSchemeWindows].normal.fg));
+                          colorschemes[ColorSchemeWindows].normal.fg);
             x += w + spacing;
 
         }
@@ -338,7 +334,7 @@ void render() {
         x11_draw_text(&state.x11, statusbar,
                       statusbar.width - text_width, state.x11.font_height,
                       state.time.c_str(), state.time.size() - 1,
-                      get_color(colorschemes[ColorSchemeBar].normal.fg));
+                      colorschemes[ColorSchemeBar].normal.fg);
         LOG("window buttons drawn");
     }
 
@@ -373,22 +369,17 @@ int main() {
     MF_Assert(log_file);
     LOG("start");
 
+
     // X11
     x11_init(&state.x11);
 
     // TODO: What to do with alpha
     for (u32 i = 0; i < ColorSchemeCount; ++i) {
         ColorScheme scheme = colorschemes[i];
-#define __add_color(c) \
-        if (!state.colors.count(c)) \
-            state.colors[c] = x11_add_color(&state.x11, c);
-
-        __add_color(scheme.normal.fg);
-        __add_color(scheme.normal.bg);
-        __add_color(scheme.selected.fg);
-        __add_color(scheme.selected.bg);
-#undef __add_color
-
+        x11_add_color(&state.x11, scheme.normal.fg);
+        x11_add_color(&state.x11, scheme.normal.bg);
+        x11_add_color(&state.x11, scheme.selected.fg);
+        x11_add_color(&state.x11, scheme.selected.bg);
     }
 
     bool isActive = XineramaIsActive(state.x11.display);
@@ -436,6 +427,7 @@ int main() {
         run_sync(Arg{cmd});
     }
     LOG("after autostart\n");
+
 
     state.wm.api.window_register = window_register;
     state.wm.api.window_focus = window_focus;

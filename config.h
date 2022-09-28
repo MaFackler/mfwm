@@ -73,10 +73,18 @@ enum {
 static int border_width_selected = 2;
 static int border_width_unselected = 1;
 
+template <u32 in> constexpr u32 _rgb() {
+    static_assert (in <= 0xFFFFFF);
+    return in >> 0;
+}
+#define RGB(a) _rgb<a>()
+
 static const ColorScheme colorschemes[] = {
-    [ColorSchemeBar] = {{ 0xFFFFFF00, 0x0}, {0xFFFFFF00, 0x0}},
-    [ColorSchemeTags] = {{ 0x0, 0x45858800 }, {0x0, 0x83a59800}},
-    [ColorSchemeWindows] = {{ 0x0, 0x689d6a00 }, {0x0, 0x8ec07c00}},
+    // [XXX] = {.normal{.fg, .bg}, .selected {.fg, .bg}}
+    // 0xAARRGGBB
+    [ColorSchemeBar] = {{ RGB(0x110000), RGB(0xFFFFFF)}, {0xFF000000, RGB(0x0)}},
+    [ColorSchemeTags] = {{ 0x0, RGB(0x458588)}, {0x0, RGB(0x83a598)}},
+    [ColorSchemeWindows] = {{ 0x0, RGB(0x689d6a)}, {0x0, RGB(0x8ec07c)}},
 };
 
 static KeyDef keybindings[] = {
@@ -95,5 +103,6 @@ static KeyDef keybindings[] = {
 };
 
 static const char *startup_commands[] = {
+    //"compton &",
     "feh --bg-scale ~/Pictures/Wallpaper.jpg",
 };

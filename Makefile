@@ -1,6 +1,8 @@
 CC=g++
 CFLAGS=-I./libs/mflibs/src -g -Wno-deprecated-declarations
-LIBS=-lX11 -lXinerama -lXrender -lm -lstdc++
+CFLAGS+=`pkg-config --cflags freetype2`
+LIBS=-lX11 -lXinerama -lXrender -lm -lstdc++ -lXft
+LIBS+=`pkg-config --libs freetype2`
 # SRCS=src/main.cpp src/mfwm_x11.h src/mfwm_x11.cpp src/mfwm_wm.h src/mfwm_wm.cpp config.h
 SRCS=$(wildcard src/*.cpp)
 SRCS+=$(wildcard src/*.h)
