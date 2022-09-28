@@ -19,12 +19,45 @@ void x11_init(X11Base *x11) {
         XSelectInput(x11->display, x11->root, attribs.event_mask);
     }
     XSync(x11->display, 0);
-    x11->depth = XDefaultDepth(x11->display, x11->screen);
-    x11->gc = XDefaultGC(x11->display, x11->screen);
-    x11->colormap = XDefaultColormap(x11->display, x11->screen);
-    XSetFillStyle(x11->display, x11->gc, FillSolid);
+    
+    // Get visual info
+    XVisualInfo *infos;
+    XRenderPictFormat *fmt;
+    i32 n, i;
+    XVisualInfo temp = {};
+    temp.screen = x11->screen;
+    temp.depth = 32;
+    temp.c_class = TrueColor;
 
-    i32 n = 0;
+    u64 mask = VisualScreenMask | VisualDepthMask | VisualClassMask;
+    infos = XGetVisualInfo(x11->display, mask, &temp, &n);
+
+    for (i = 0; i < n; ++i) {
+        fmt = XRenderFindVisualFormat(x11->display,
+                                      infos[i].visual);
+        if (fmt->type = PictTypeDirect && fmt->direct.alphaMask) {
+            x11->visual = infos[i].visual;
+            x11->depth = infos[i].depth;
+            x11->colormap = XCreateColormap(x11->display, x11->root, x11->visual, AllocNone);
+            x11->alpha_supported = true;
+            LOG("SUPPORT ALPHA");
+            break;
+        }
+    }
+
+    if (!x11->alpha_supported) {
+        x11->visual = XDefaultVisual(x11->display, x11->screen);
+        x11->depth = XDefaultDepth(x11->display, x11->screen);
+        x11->colormap = XDefaultColormap(x11->display, x11->screen);
+    }
+
+    XFree(infos);
+    
+    MF_Assert(x11->visual);
+    MF_Assert(x11->depth);
+    MF_Assert(x11->colormap);
+    
+
     char **fonts = XListFonts(x11->display, "*", 256, &n);
     MF_Assert(n > 0);
     // TODO: move to xft for better fonts
@@ -36,7 +69,6 @@ void x11_init(X11Base *x11) {
 }
 
 void x11_shutdown(X11Base *x11) {
-    XFreeGC(x11->display, x11->gc);
     XCloseDisplay(x11->display);
 }
 
@@ -47,7 +79,10 @@ void x11_window_grab_key(X11Base *x11, Window window, KeySym sym, u32 mod) {
 
 X11Window x11_window_create(X11Base *x11, u32 x, u32 y, u32 width, u32 height) {
     XSetWindowAttributes attribs = {};
-    attribs.background_pixel = ParentRelative;
+    attribs.background_pixmap = ParentRelative;
+    attribs.background_pixel = 0;
+    attribs.border_pixel = 0;
+    attribs.colormap = x11->colormap;
     attribs.event_mask = ButtonPressMask | ExposureMask;
     Window window = XCreateWindow(x11->display,
                                   x11->root,
@@ -56,17 +91,20 @@ X11Window x11_window_create(X11Base *x11, u32 x, u32 y, u32 width, u32 height) {
                                   height,
                                   0,
                                   x11->depth,
-                                  CopyFromParent,
-                                  XDefaultVisual(x11->display, x11->screen),
-                                  CWEventMask | CWBackPixel,
+                                  InputOutput,
+                                  x11->visual,
+                                  CWOverrideRedirect | CWBackPixel | CWBorderPixel | CWColormap |CWEventMask,
                                   &attribs);
     XMapWindow(x11->display, window);
     Drawable draw = XCreatePixmap(x11->display, window, width, height, x11->depth);
-    X11Window res = {window, draw, width, height};
+    GC gc = XCreateGC(x11->display, draw, 0, NULL);
+    XSetFillStyle(x11->display, gc, FillSolid);
+    X11Window res = {window, draw, gc, width, height};
     return res;
 };
 
 void x11_window_destroy(X11Base *x11, X11Window &window) {
+    XFreeGC(x11->display, window.gc);
     XFreePixmap(x11->display, window.draw);
 }
 
@@ -110,16 +148,16 @@ XColor x11_add_color(X11Base *x11, u32 color) {
 }
 
 void x11_fill_rect(X11Base *x11, X11Window &window, i32 x, i32 y, u32 w, u32 h, XColor color) {
-    XSetForeground(x11->display, x11->gc, color.pixel);
-    XSetBackground(x11->display, x11->gc, color.pixel);
-    XFillRectangle(x11->display, window.draw, x11->gc, x, y, w, h);
-    XCopyArea(x11->display, window.draw, window.window, x11->gc, 0, 0, window.width, window.height, 0, 0);
+    XSetForeground(x11->display, window.gc, color.pixel);
+    XSetBackground(x11->display, window.gc, color.pixel);
+    XFillRectangle(x11->display, window.draw, window.gc, x, y, w, h);
+    XCopyArea(x11->display, window.draw, window.window, window.gc, 0, 0, window.width, window.height, 0, 0);
 }
 
 void x11_draw_text(X11Base *x11, X11Window &window, i32 x, i32 y, const char *text, u64 n, XColor color) {
-    XSetForeground(x11->display, x11->gc, color.pixel);
-    XDrawString(x11->display, window.draw, x11->gc, x, y, text, n);
-    XCopyArea(x11->display, window.draw, window.window, x11->gc, 0, 0, window.width, window.height, 0, 0);
+    XSetForeground(x11->display, window.gc, color.pixel);
+    XDrawString(x11->display, window.draw, window.gc, x, y, text, n);
+    XCopyArea(x11->display, window.draw, window.window, window.gc, 0, 0, window.width, window.height, 0, 0);
 }
 
 void x11_get_window_name(X11Base *x11, Window window, char *data, u32 n) {

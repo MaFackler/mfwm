@@ -4,17 +4,20 @@
 struct X11Window {
     Window window;
     Drawable draw;
+    GC gc;
     u32 width = 0;
     u32 height = 0;
 };
 
 struct X11Base {
+    bool alpha_supported = false;
     Display *display;
     Window root;
     i32 screen;
     u32 depth;
     Colormap colormap = {};
-    GC gc;
+    Visual *visual;
+    //GC gc;
 
     vector<XColor> colors;
 

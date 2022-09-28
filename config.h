@@ -74,7 +74,7 @@ static int border_width_selected = 2;
 static int border_width_unselected = 1;
 
 static const ColorScheme colorschemes[] = {
-    [ColorSchemeBar] = {{ 0xFFFFFFFF, 0x0}, {0xFFFFFFFF, 0x0}},
+    [ColorSchemeBar] = {{ 0xFFFFFF00, 0x0}, {0xFFFFFF00, 0x0}},
     [ColorSchemeTags] = {{ 0x0, 0x45858800 }, {0x0, 0x83a59800}},
     [ColorSchemeWindows] = {{ 0x0, 0x689d6a00 }, {0x0, 0x8ec07c00}},
 };
