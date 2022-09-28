@@ -9,6 +9,8 @@
 #include "mfwm_wm.h"
 #include <map>
 
+#include <array>
+
 #include <mf.h>
 #define MF_VECTOR_IMPLEMENTATION
 #include <mf_vector.h>
@@ -23,6 +25,7 @@
 #include "mfwm_x11.cpp"
 #include "mfwm_wm.cpp"
 
+using std::array;
 
 struct State {
     bool running = true;
@@ -87,13 +90,10 @@ void do_layout(Rect *rect, vec<u32> windows) {
     i32 amount_windows = mf_vec_size(windows);
     for (i32 i = 0; i < amount_windows; ++i) {
         u32 window = windows[i]; 
-        // TODO: why does mf_str not work bug???!
-        //mf_str buf = mf_str_new(256);
-        char buf[256] = {};
-        x11_get_window_name(x11, window, buf, 256);
-        mf__str_get_header(buf)->size = strlen(buf);
+        array<char, 256> buf = {};
+        x11_get_window_name(x11, window, &buf[0], buf.size());
+        mf__str_get_header(&buf[0])->size = strlen(&buf[0]);
         LOGF("Window name is nr=%d id=%d-%s", i, window, buf);
-        //mf_str_free(buf);
 
         // Calculate
         i32 window_x = rect->x + GAP;
