@@ -1,13 +1,17 @@
 #pragma once
+#define SPDLOG_COMPILED_LIB
+#include "spdlog/spdlog.h"
+//#include "spdlog/sinks/basic_file_sink.h"
+#include "spdlog/sinks/rotating_file_sink.h"
 
-FILE *log_file = NULL;
 
-#define LOG(msg) fprintf(log_file, msg "\n"); fflush(log_file);
-#define LOGF(msg, ...) fprintf(log_file, msg "\n", __VA_ARGS__); fflush(log_file);
-#define ERROR(msg) fprintf(stderr, msg); exit(EXIT_FAILURE);
-#define ERRORF(msg, ...) fprintf(stderr, msg, __VA_ARGS__); exit(EXIT_FAILURE);
+#define INFO spdlog::info
+#define ERROR spdlog::error
 
-void log_init() {
-    log_file = fopen("./mfwm.log", "w");
+void mfwm_log_init() {
+    //auto logger = spdlog::basic_logger_mt("file_logger", "mfwm.log", true);
+    auto logger = spdlog::rotating_logger_mt("file_logger", "mfwm.log", 1024 * 1024, 1);
+    spdlog::set_default_logger(logger);
 }
+
 

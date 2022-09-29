@@ -40,7 +40,6 @@ void x11_init(X11Base *x11) {
             x11->depth = infos[i].depth;
             x11->colormap = XCreateColormap(x11->display, x11->root, x11->visual, AllocNone);
             x11->alpha_supported = true;
-            LOG("SUPPORT ALPHA");
             break;
         }
     }

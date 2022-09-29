@@ -8,6 +8,7 @@
 #include <X11/extensions/Xinerama.h>
 #include <X11/extensions/Xrender.h>
 
+
 #include "mfwm_wm.h"
 #include <map>
 #include <array>
@@ -93,7 +94,6 @@ void do_layout(Rect *rect, const vector<u32> &windows) {
         string buf(256, '\0');
         x11_get_window_name(x11, window, &buf[0], buf.size());
         buf.resize(strlen(&buf[0]));
-        LOGF("Window name is nr=%d id=%d-%s", i, window, buf);
 
         // Calculate
         i32 window_x = rect->x + GAP;
@@ -133,7 +133,7 @@ void log_event(const char *func, Window window) {
     if (window) {
         x11_get_window_name(&state.x11, window, &_buf[0], MF_ArrayLength(_buf));
     }
-    LOGF("- EVENT - %s: %d-%s", func, window, &_buf[0])
+    INFO("GOT EVENT [{}] Window={}-{}", func, window, &_buf[0]);
 }
 
 
@@ -153,7 +153,7 @@ void motion_notify(XEvent &e) {
     XMotionEvent event = e.xmotion;
     i32 x = event.x_root;
     i32 y = event.y_root;
-    log_event(__func__, event.window);
+    //log_event(__func__, event.window);
 
     if (event.window != state.x11.root) {
         return;
@@ -169,7 +169,6 @@ void motion_notify(XEvent &e) {
         }
     }
 
-    LOG("motion notify end");
 }
 
 void enter_notify(XEvent &e) {
@@ -196,7 +195,6 @@ void unmap_request(XEvent &e) {
     XUnmapEvent event = e.xunmap;
     // NOTE: unmap request not able to print window name
     log_event(__func__, 0);
-    LOGF("umap_request window %d", event.window);
     window_manager_window_delete(&state.wm, event.window);
     render();
 }
@@ -262,7 +260,6 @@ string get_time_string() {
 
 void render() {
 
-    LOG("do render");
     i32 text_width = x11_get_text_width(&state.x11, state.time.c_str(), state.time.size());
     for (i32 i = 0; i < state.wm.monitors.size(); ++i) {
 
@@ -276,7 +273,6 @@ void render() {
                       0, 0,
                       statusbar.width, statusbar.height,
                       color);
-        LOG("statusbar drawn");
 
 
         i32 x_margin = 5;
@@ -306,12 +302,10 @@ void render() {
             x += w_total + spacing;
         }
         x += 100;
-        LOG("tags drawn");
 
         Tag *tag = window_manager_monitor_get_selected_tag(&state.wm, mon);
         for (i32 i = 0; i < tag->window_names.size(); ++i) {
             string &text = tag->window_names[i];
-            LOG("going to get text width");
             i32 w = x11_get_text_width(&state.x11, text.data(), text.size());
             i32 w_total = w + x_margin * 2;
             u32 c = colorschemes[ColorSchemeWindows].normal.bg;
@@ -335,10 +329,8 @@ void render() {
                       statusbar.width - text_width, state.x11.font_height,
                       state.time.c_str(), state.time.size() - 1,
                       colorschemes[ColorSchemeBar].normal.fg);
-        LOG("window buttons drawn");
     }
 
-    LOG("dorender end");
     //XSync(state.x11.display, False);
 }
 
@@ -365,11 +357,8 @@ void time_update(State *state) {
 
 
 int main() {
-    log_init();
-    MF_Assert(log_file);
-    LOG("start");
 
-
+    mfwm_log_init();
     // X11
     x11_init(&state.x11);
 
@@ -398,7 +387,7 @@ int main() {
             info[i].width,
             info[i].height,
         };
-        LOGF("Got scren number %d (%d+%d %dx%d)", info[i].screen_number, rect.x, rect.y, rect.w, rect.h);
+        INFO("Got scren number {} ({}+{} {}x{})", info[i].screen_number, rect.x, rect.y, rect.w, rect.h);
         window_manager_add_monitor(&state.wm, rect);
         Statusbar statusbar = {rect.x, rect.y, rect.w, STATUSBAR_HEIGHT};
         state.statusbars.emplace_back(statusbar);
@@ -421,12 +410,10 @@ int main() {
         x11_window_grab_key(&state.x11, state.x11.root, def.keysym, def.state);
     }
 
-    LOG("before autostart\n");
     for (i32 i = 0; i < MF_ArrayLength(startup_commands); ++i) {
         const char *cmd = startup_commands[i];
         run_sync(Arg{cmd});
     }
-    LOG("after autostart\n");
 
 
     state.wm.api.window_register = window_register;
@@ -468,12 +455,11 @@ int main() {
             case FocusOut: break;
             case ClientMessage: break;
             case MappingNotify: break;
-            default: ERRORF("Unhandled event %d\n", e.type); break;
+            default: ERROR("Unhandled event {}", e.type); break;
 
         }
     }
 
-    fclose(log_file);
 
     thread_time_update.join();
 
