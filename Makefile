@@ -11,7 +11,7 @@ SRCS+=$(wildcard src/*.h)
 SRCS+=config.h
 
 # CONTANTS
-TEST_RESOLUTION=1600x900
+TEST_RESOLUTION=800x600
 
 all: build/mfwm
 

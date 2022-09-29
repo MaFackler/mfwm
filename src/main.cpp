@@ -129,11 +129,19 @@ void do_layout(Rect *rect, const vector<u32> &windows) {
 }
 
 void log_event(const char *func, Window window) {
-    char _buf[256] = {};
+    u64 size = 256;
+    string buf(size, '\0');
     if (window) {
-        x11_get_window_name(&state.x11, window, &_buf[0], MF_ArrayLength(_buf));
+        if (window == state.x11.root) {
+            buf = "root";
+        } else {
+            x11_get_window_name(&state.x11, window, &buf[0], size);
+        }
     }
-    INFO("GOT EVENT [{}] Window={}-{}", func, window, &_buf[0]);
+
+    buf.resize(strlen(buf.c_str()));
+
+    INFO("GOT EVENT [{}] Window={}-{}", func, window, &buf[0]);
 }
 
 
@@ -359,6 +367,7 @@ void time_update(State *state) {
 int main() {
 
     mfwm_log_init();
+    INFO("START");
     // X11
     x11_init(&state.x11);
 
